@@ -160,14 +160,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
     <input type="password" id="apiKeyInp" placeholder="Dán API key vào đây (bắt đầu bằng AIza...)">
     <div class="hint">Lấy miễn phí tại <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--primary)">aistudio.google.com/apikey</a></div>
 
-    <label>🤖 Model Gemini</label>
-    <select id="modelSel">
-      <option value="gemini-3.5-flash">gemini-3.5-flash ⭐ (Khuyên dùng — Trợ giúp toàn diện)</option>
-      <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Nhanh nhất)</option>
-      <option value="gemini-3.1-pro">gemini-3.1-pro (Toán học & lập trình nâng cao)</option>
-      <option value="gemini-2.0-flash">gemini-2.0-flash (Dự phòng)</option>
-    </select>
-    <div class="hint">Dùng <strong>gemini-3.5-flash</strong> — tốt nhất cho học tiếng Anh. Nếu lỗi, kiểm tra tên model tại <a href="https://aistudio.google.com" target="_blank" style="color:var(--primary)">aistudio.google.com</a></div>
+    <label>🤖 Tên Model Gemini (gõ chính xác)</label>
+    <input type="text" id="modelSel" placeholder="Ví dụ: gemini-2.0-flash" value="gemini-2.0-flash">
+    <div class="hint">⚠️ Gõ đúng tên model API — vào <a href="https://aistudio.google.com" target="_blank" style="color:var(--primary)">aistudio.google.com</a> → chọn model → xem tên hiển thị góc trên. Thường là: <strong>gemini-2.0-flash</strong> hoặc <strong>gemini-2.5-flash-preview-05-20</strong></div>
 
     <div id="setErr" class="hidden" style="margin-top:12px;padding:10px 14px;background:#FEF2F2;border-radius:8px;color:#991B1B;font-size:13px;border:1px solid #FECACA"></div>
     <button class="btn btn-primary btn-block" onclick="saveSettings()">🚀 Bắt đầu học</button>
@@ -419,7 +414,7 @@ function switchTab(t) {
 async function gemini(prompt, sys='', temp=0.7) {
   const body = {
     contents:[{parts:[{text:prompt}]}],
-    generationConfig:{temperature:temp, maxOutputTokens:2048}
+    generationConfig:{temperature:temp, maxOutputTokens:8192}
   };
   if (sys) body.system_instruction={parts:[{text:sys}]};
 
@@ -434,7 +429,7 @@ async function gemini(prompt, sys='', temp=0.7) {
 
 async function geminiConv(hist, sys='') {
   const contents = hist.map(m=>({role:m.r==='ai'?'model':'user', parts:[{text:m.t}]}));
-  const body = {contents, generationConfig:{temperature:0.8, maxOutputTokens:512}};
+  const body = {contents, generationConfig:{temperature:0.8, maxOutputTokens:2048}};
   if (sys) body.system_instruction={parts:[{text:sys}]};
   const r = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${S.model}:generateContent?key=${S.key}`,
@@ -446,7 +441,13 @@ async function geminiConv(hist, sys='') {
 }
 
 function parseJ(txt) {
-  const c = txt.replace(/```json\n?/gi,'').replace(/```\n?/gi,'').trim();
+  // Remove markdown code blocks
+  let c = txt.replace(/```json\n?/gi,'').replace(/```\n?/gi,'').trim();
+  // Find JSON array or object
+  const arrMatch = c.match(/\[[\s\S]*\]/);
+  const objMatch = c.match(/\{[\s\S]*\}/);
+  if (arrMatch) c = arrMatch[0];
+  else if (objMatch) c = objMatch[0];
   return JSON.parse(c);
 }
 
@@ -488,9 +489,10 @@ async function startTest() {
   toggle('testIntro',false); toggle('testRes',false); toggle('testLoad',true); toggle('testQs',false);
   try {
     const raw = await gemini(
-      `Create exactly 10 English placement test questions (2 per level: A1,A1,A2,A2,B1,B1,B2,B2,C1,C1).
-Mix grammar, vocabulary, and comprehension. Return ONLY a JSON array, no extra text:
-[{"q":"Question text here?","options":["A. First option","B. Second option","C. Third option","D. Fourth option"],"answer":"A","level":"A1"}]`,
+      `Create 10 English placement test questions, 2 per level (A1,A2,B1,B2,C1).
+Return ONLY JSON array, no markdown, no explanation:
+[{"q":"___","options":["A. ___","B. ___","C. ___","D. ___"],"answer":"A","level":"A1"}]
+Keep questions SHORT. Mix grammar and vocabulary. Return all 10 questions.`,
       '', 0.3
     );
     S.testQs = parseJ(raw);
@@ -870,13 +872,3 @@ async function doSummary() {
   }
 }
 
-// ══════════════════════════════════════════════
-// UTILS
-// ══════════════════════════════════════════════
-function toggle(id, show) { document.getElementById(id).classList.toggle('hidden',!show); }
-function toggleAns(id) { const el=document.getElementById(id); el.style.display=el.style.display==='block'?'none':'block'; }
-function showErr(id,msg) { const e=document.getElementById(id); if(e){e.textContent=msg;e.classList.remove('hidden');} }
-function esc(s) { return (s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'\\"'); }
-</script>
-</body>
-</html>
