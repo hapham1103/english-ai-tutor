@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>English AI Tutor 🎓</title>
+<style>
+:root {
+  --primary: #0EA5E9;
+  --primary-dk: #0284C7;
+  --success: #10B981;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+  --bg: #F8FAFC;
+  --surface: #FFFFFF;
+  --border: #E2E8F0;
+  --text: #1E293B;
+  --muted: #64748B;
+  --radius: 12px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.6; min-height: 100vh; }
+
+/* ── SETTINGS ── */
+#settingsScreen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.s-card { background: var(--surface); border-radius: 20px; padding: 36px 28px; max-width: 420px; width: 100%; border: 1px solid var(--border); }
+.s-logo { font-size: 52px; text-align: center; margin-bottom: 10px; }
+.s-title { font-size: 22px; font-weight: 600; text-align: center; margin-bottom: 4px; }
+.s-sub { color: var(--muted); text-align: center; font-size: 14px; margin-bottom: 28px; }
+label { font-size: 13px; font-weight: 500; color: var(--muted); display: block; margin-bottom: 5px; margin-top: 14px; }
+input[type=text], input[type=password], select, textarea {
+  width: 100%; padding: 11px 13px; border: 1.5px solid var(--border); border-radius: 10px;
+  font-size: 14px; font-family: inherit; background: var(--bg); color: var(--text); outline: none; transition: border-color .2s;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--primary); }
+.hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+/* ── BUTTONS ── */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 11px 18px; border-radius: 9px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; font-family: inherit; transition: all .15s; text-decoration: none; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-dk); }
+.btn-outline { background: transparent; border: 1.5px solid var(--border); color: var(--text); }
+.btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+.btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 7px; }
+.btn-block { width: 100%; margin-top: 18px; }
+.btn-success { background: var(--success); color: #fff; }
+
+/* ── APP SHELL ── */
+#mainApp { display: none; flex-direction: column; min-height: 100vh; }
+#mainApp.active { display: flex; }
+.header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 16px; height: 54px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+.h-title { font-weight: 600; font-size: 16px; }
+.h-right { display: flex; align-items: center; gap: 8px; }
+.level-badge { font-size: 11px; background: var(--primary); color: #fff; padding: 3px 9px; border-radius: 20px; font-weight: 600; }
+.content { flex: 1; padding: 14px; max-width: 700px; margin: 0 auto; width: 100%; overflow-y: auto; }
+.tab-bar { background: var(--surface); border-top: 1px solid var(--border); display: grid; grid-template-columns: repeat(4,1fr); position: sticky; bottom: 0; }
+.tab { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 9px 4px; cursor: pointer; font-size: 11px; color: var(--muted); border: none; background: none; font-family: inherit; transition: color .15s; }
+.tab.active { color: var(--primary); }
+.tab-icon { font-size: 20px; }
+
+/* ── SCREENS ── */
+.screen { display: none; }
+.screen.active { display: block; }
+
+/* ── CARDS & LAYOUT ── */
+.card { background: var(--surface); border-radius: var(--radius); padding: 16px; border: 1px solid var(--border); margin-bottom: 12px; }
+.sec-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+.chip-blue { background: #EFF6FF; color: #1D4ED8; }
+.chip-green { background: #ECFDF5; color: #065F46; }
+.chip-orange { background: #FFF7ED; color: #9A3412; }
+
+/* ── LOADING ── */
+.loading { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 24px; color: var(--muted); font-size: 14px; }
+.dots span { display: inline-block; width: 6px; height: 6px; background: var(--primary); border-radius: 50%; animation: bounce .6s ease-in-out infinite; }
+.dots span:nth-child(2) { animation-delay: .15s; }
+.dots span:nth-child(3) { animation-delay: .3s; }
+@keyframes bounce { 0%,80%,100%{transform:scale(0)} 40%{transform:scale(1)} }
+.hidden { display: none !important; }
+
+/* ── TEST SCREEN ── */
+.prog-bar { background: var(--border); border-radius: 4px; height: 7px; margin-bottom: 4px; overflow: hidden; }
+.prog-fill { background: var(--primary); height: 100%; border-radius: 4px; transition: width .3s; }
+.prog-label { font-size: 12px; color: var(--muted); text-align: right; margin-bottom: 16px; }
+.q-text { font-size: 17px; font-weight: 500; margin-bottom: 16px; line-height: 1.5; }
+.opts { display: flex; flex-direction: column; gap: 9px; }
+.opt-btn { padding: 13px 15px; border: 1.5px solid var(--border); border-radius: 9px; background: var(--surface); cursor: pointer; font-size: 14px; text-align: left; transition: all .15s; font-family: inherit; }
+.opt-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+.opt-btn.correct { border-color: var(--success) !important; background: #ECFDF5; color: #065F46; }
+.opt-btn.wrong { border-color: var(--danger) !important; background: #FEF2F2; color: #991B1B; }
+.result-big { font-size: 52px; font-weight: 700; color: var(--primary); text-align: center; margin: 10px 0; }
+
+/* ── LESSON SCREEN ── */
+.topic-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 9px; margin-bottom: 14px; }
+.topic-btn { padding: 13px 10px; border: 1.5px solid var(--border); border-radius: 9px; background: var(--surface); cursor: pointer; font-size: 13px; text-align: center; transition: all .15s; font-family: inherit; line-height: 1.4; }
+.topic-btn:hover, .topic-btn.sel { border-color: var(--primary); background: #EFF6FF; color: #1E40AF; }
+.l-tabs { display: flex; gap: 7px; margin-bottom: 14px; overflow-x: auto; padding-bottom: 2px; }
+.l-tab { padding: 7px 14px; border: 1.5px solid var(--border); border-radius: 20px; background: var(--surface); cursor: pointer; font-size: 13px; white-space: nowrap; font-family: inherit; transition: all .15s; }
+.l-tab.active { border-color: var(--primary); background: var(--primary); color: #fff; }
+.v-card { border: 1px solid var(--border); border-radius: 10px; padding: 13px; margin-bottom: 9px; background: var(--surface); }
+.v-word { font-size: 20px; font-weight: 600; color: var(--primary); }
+.v-phonetic { font-size: 12px; color: var(--muted); }
+.v-meaning { font-size: 13px; margin: 4px 0; }
+.v-example { font-size: 13px; color: var(--muted); font-style: italic; }
+.g-box { background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 10px; padding: 15px; margin-bottom: 12px; }
+.g-title { font-weight: 600; color: #1E40AF; margin-bottom: 7px; }
+.g-exp { font-size: 13px; margin-bottom: 12px; }
+.g-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.g-list li { font-size: 13px; padding-left: 18px; position: relative; }
+.g-list li::before { content: '→'; position: absolute; left: 0; color: var(--primary); }
+.r-text { font-size: 14px; line-height: 1.8; padding: 14px; background: var(--bg); border-radius: 9px; margin-bottom: 14px; }
+
+/* ── QUIZ SCREEN ── */
+.qtype-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 9px; margin-bottom: 14px; }
+.qtype-btn { padding: 16px 12px; border: 1.5px solid var(--border); border-radius: 10px; background: var(--surface); cursor: pointer; text-align: center; transition: all .15s; font-family: inherit; }
+.qtype-btn:hover { border-color: var(--primary); background: #EFF6FF; }
+.qtype-icon { font-size: 26px; display: block; margin-bottom: 6px; }
+.qtype-name { font-size: 13px; font-weight: 500; }
+.fill-inp { width: 100%; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; outline: none; transition: border-color .2s; margin-top: 8px; }
+.fill-inp:focus { border-color: var(--primary); }
+.fill-inp.correct { border-color: var(--success); background: #ECFDF5; }
+.fill-inp.wrong { border-color: var(--danger); background: #FEF2F2; }
+.inline-inp { display: inline-block; width: 130px; padding: 4px 8px; border: 1.5px solid var(--primary); border-radius: 6px; font-size: 14px; font-family: inherit; outline: none; vertical-align: middle; margin: 0 4px; }
+
+/* ── CONVERSATION SCREEN ── */
+.sc-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 9px; margin-bottom: 14px; }
+.sc-btn { padding: 13px 10px; border: 1.5px solid var(--border); border-radius: 9px; background: var(--surface); cursor: pointer; font-size: 13px; text-align: center; transition: all .15s; font-family: inherit; line-height: 1.5; }
+.sc-btn:hover, .sc-btn.sel { border-color: var(--primary); background: #EFF6FF; color: #1E40AF; }
+.chat-win { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); height: 400px; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 11px; margin-bottom: 10px; scroll-behavior: smooth; }
+.msg { display: flex; gap: 8px; align-items: flex-start; }
+.msg.user { flex-direction: row-reverse; }
+.msg-av { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; background: var(--bg); border: 1px solid var(--border); }
+.msg.user .msg-av { background: #DBEAFE; }
+.bubble { max-width: 78%; padding: 9px 13px; border-radius: 4px 16px 16px 16px; font-size: 14px; line-height: 1.6; background: #F1F5F9; }
+.msg.user .bubble { background: var(--primary); color: #fff; border-radius: 16px 4px 16px 16px; }
+.correction { background: #FFFBEB; border: 1px solid #FCD34D; border-radius: 8px; padding: 7px 10px; font-size: 13px; color: #92400E; margin-top: 5px; max-width: 82%; }
+.speak-btn { background: none; border: none; cursor: pointer; font-size: 15px; opacity: 0.55; padding: 1px 3px; vertical-align: middle; }
+.speak-btn:hover { opacity: 1; }
+.chat-ia { display: flex; gap: 7px; align-items: flex-end; }
+.chat-inp { flex: 1; padding: 10px 13px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 14px; font-family: inherit; outline: none; resize: none; min-height: 42px; max-height: 110px; }
+.chat-inp:focus { border-color: var(--primary); }
+.mic-btn { width: 42px; height: 42px; border-radius: 50%; border: 1.5px solid var(--border); background: var(--surface); cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all .15s; }
+.mic-btn.on { background: #FEF2F2; border-color: var(--danger); animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
+.send-btn { width: 42px; height: 42px; border-radius: 50%; border: none; background: var(--primary); color: #fff; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.send-btn:hover { background: var(--primary-dk); }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+
+<!-- ════════════ SETTINGS ════════════ -->
+<div id="settingsScreen">
+  <div class="s-card">
+    <div class="s-logo">🎓</div>
+    <div class="s-title">English AI Tutor</div>
+    <div class="s-sub">Học tiếng Anh thông minh cùng Gemini AI · Hoàn toàn miễn phí</div>
+
+    <label>🔑 Gemini API Key</label>
+    <input type="password" id="apiKeyInp" placeholder="Dán API key vào đây (bắt đầu bằng AIza...)">
+    <div class="hint">Lấy miễn phí tại <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--primary)">aistudio.google.com/apikey</a></div>
+
+    <label>🤖 Tên Model Gemini (gõ chính xác)</label>
+    <input type="text" id="modelSel" placeholder="gemini-3.5-flash" value="gemini-3.5-flash">
+    <div class="hint">✅ Model của bạn là <strong>gemini-3.5-flash</strong> — đã xác nhận đúng từ lỗi API</div>
+
+    <div id="setErr" class="hidden" style="margin-top:12px;padding:10px 14px;background:#FEF2F2;border-radius:8px;color:#991B1B;font-size:13px;border:1px solid #FECACA"></div>
+    <button class="btn btn-primary btn-block" onclick="saveSettings()">🚀 Bắt đầu học</button>
+  </div>
+</div>
+
+<!-- ════════════ MAIN APP ════════════ -->
+<div id="mainApp">
+  <div class="header">
+    <div class="h-title">🎓 English AI Tutor</div>
+    <div class="h-right">
+      <span class="level-badge" id="lvlBadge">---</span>
+      <button class="btn btn-outline btn-sm" onclick="showSettings()">⚙️</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ── SCREEN: TEST ── -->
+    <div class="screen active" id="scr-test">
+      <div id="testIntro">
+        <div class="card" style="text-align:center;padding:28px 16px">
+          <div style="font-size:48px;margin-bottom:10px">🧪</div>
+          <div style="font-size:19px;font-weight:600;margin-bottom:8px">Kiểm tra trình độ</div>
+          <div style="color:var(--muted);font-size:14px;margin-bottom:20px">10 câu hỏi · Tự động xác định cấp độ A1 → C1</div>
+          <button class="btn btn-primary" style="max-width:200px;margin:0 auto" onclick="startTest()">Bắt đầu kiểm tra</button>
+        </div>
+        <div id="prevResult" class="card hidden">
+          <div class="sec-title">Kết quả lần trước</div>
+          <div id="prevInfo"></div>
+          <button class="btn btn-outline" style="margin-top:10px" onclick="startTest()">🔄 Làm lại kiểm tra</button>
+        </div>
+      </div>
+
+      <div id="testQs" class="hidden">
+        <div class="card">
+          <div class="prog-bar"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+          <div class="prog-label" id="progLbl">Câu 1/10</div>
+          <div class="q-text" id="qText"></div>
+          <div class="opts" id="optsBox"></div>
+        </div>
+      </div>
+
+      <div id="testRes" class="hidden">
+        <div class="card" style="text-align:center;padding:28px">
+          <div style="font-size:40px">🏆</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:8px">Trình độ của bạn</div>
+          <div class="result-big" id="resLvl"></div>
+          <div style="font-size:14px;color:var(--muted);margin-bottom:6px" id="resDesc"></div>
+          <div style="font-size:13px;color:var(--muted);margin-bottom:20px" id="resScore"></div>
+          <button class="btn btn-primary" style="max-width:210px;margin:0 auto 10px;display:flex" onclick="switchTab('lesson')">📚 Bắt đầu học ngay</button>
+          <button class="btn btn-outline" style="max-width:210px;margin:0 auto;display:flex" onclick="startTest()">🔄 Làm lại</button>
+        </div>
+      </div>
+
+      <div id="testLoad" class="hidden"><div class="loading"><div class="dots"><span></span><span></span><span></span></div>Đang tạo câu hỏi...</div></div>
+    </div>
+
+    <!-- ── SCREEN: LESSON ── -->
+    <div class="screen" id="scr-lesson">
+      <div id="lessonTopics">
+        <div class="sec-title">📚 Chọn chủ đề bài học</div>
+        <div class="topic-grid">
+          <button class="topic-btn" data-t="Daily communication" onclick="pickTopic(this)">🗣️ Giao tiếp hàng ngày</button>
+          <button class="topic-btn" data-t="Travel and tourism" onclick="pickTopic(this)">✈️ Du lịch</button>
+          <button class="topic-btn" data-t="Work and business" onclick="pickTopic(this)">💼 Công việc</button>
+          <button class="topic-btn" data-t="Shopping and services" onclick="pickTopic(this)">🛒 Mua sắm</button>
+          <button class="topic-btn" data-t="Health and lifestyle" onclick="pickTopic(this)">🏥 Sức khỏe</button>
+          <button class="topic-btn" data-t="Family and hobbies" onclick="pickTopic(this)">🏠 Gia đình & Sở thích</button>
+        </div>
+        <div id="lessonLoad" class="hidden"><div class="loading"><div class="dots"><span></span><span></span><span></span></div>Đang tạo bài học...</div></div>
+      </div>
+
+      <div id="lessonBody" class="hidden">
+        <div class="row">
+          <span class="chip chip-blue" id="topicChip"></span>
+          <span class="chip chip-green" id="lvlChip2"></span>
+          <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="backToTopics()">← Đổi chủ đề</button>
+          <button class="btn btn-outline btn-sm" onclick="loadLesson()">🔄 Bài mới</button>
+        </div>
+        <div class="l-tabs">
+          <button class="l-tab active" onclick="showLTab('vocab',this)">📖 Từ vựng</button>
+          <button class="l-tab" onclick="showLTab('gram',this)">📝 Ngữ pháp</button>
+          <button class="l-tab" onclick="showLTab('read',this)">📰 Đọc hiểu</button>
+        </div>
+        <div id="lt-vocab"></div>
+        <div id="lt-gram" class="hidden"></div>
+        <div id="lt-read" class="hidden"></div>
+      </div>
+    </div>
+
+    <!-- ── SCREEN: QUIZ ── -->
+    <div class="screen" id="scr-quiz">
+      <div id="quizMenu">
+        <div class="sec-title">✏️ Chọn dạng luyện tập</div>
+        <div class="qtype-grid">
+          <button class="qtype-btn" onclick="runQuiz('mc')"><span class="qtype-icon">🔤</span><span class="qtype-name">Trắc nghiệm</span></button>
+          <button class="qtype-btn" onclick="runQuiz('fill')"><span class="qtype-icon">✍️</span><span class="qtype-name">Điền chỗ trống</span></button>
+          <button class="qtype-btn" onclick="runQuiz('trans')"><span class="qtype-icon">🔄</span><span class="qtype-name">Dịch câu</span></button>
+          <button class="qtype-btn" onclick="runQuiz('dict')"><span class="qtype-icon">🎧</span><span class="qtype-name">Nghe chép</span></button>
+        </div>
+        <div style="font-size:12px;color:var(--muted);text-align:center">Chủ đề: theo bài học đã chọn · Cấp độ: <span id="quizLvlNote"></span></div>
+      </div>
+      <div id="quizLoad" class="hidden"><div class="loading"><div class="dots"><span></span><span></span><span></span></div>Đang tạo bài tập...</div></div>
+      <div id="quizBody" class="hidden"></div>
+    </div>
+
+    <!-- ── SCREEN: CONVERSATION ── -->
+    <div class="screen" id="scr-conv">
+      <div id="scPick">
+        <div class="sec-title">💬 Chọn kịch bản hội thoại</div>
+        <div class="sc-grid">
+          <button class="sc-btn" data-sc="airport" onclick="pickScenario(this)">✈️ Tại sân bay<br><small style="color:var(--muted)">Check-in, hải quan</small></button>
+          <button class="sc-btn" data-sc="hotel" onclick="pickScenario(this)">🏨 Tại khách sạn<br><small style="color:var(--muted)">Đặt phòng, dịch vụ</small></button>
+          <button class="sc-btn" data-sc="restaurant" onclick="pickScenario(this)">🍽️ Tại nhà hàng<br><small style="color:var(--muted)">Gọi món, thanh toán</small></button>
+          <button class="sc-btn" data-sc="interview" onclick="pickScenario(this)">💼 Phỏng vấn<br><small style="color:var(--muted)">Xin việc, tự giới thiệu</small></button>
+          <button class="sc-btn" data-sc="shopping" onclick="pickScenario(this)">🛒 Mua sắm<br><small style="color:var(--muted)">Hỏi giá, đổi trả</small></button>
+          <button class="sc-btn" data-sc="free" onclick="pickScenario(this)">🗣️ Trò chuyện tự do<br><small style="color:var(--muted)">Sở thích, kế hoạch</small></button>
+        </div>
+      </div>
+
+      <div id="chatUI" class="hidden">
+        <div class="row">
+          <span class="chip chip-blue" id="scChip"></span>
+          <span class="chip chip-green" id="lvlChip3"></span>
+          <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="backToScenarios()">← Đổi</button>
+          <button class="btn btn-outline btn-sm" onclick="doSummary()">📊 Tổng kết</button>
+        </div>
+        <div class="chat-win" id="chatWin"></div>
+        <div id="convLoad" class="hidden"><div class="loading" style="padding:8px"><div class="dots"><span></span><span></span><span></span></div></div></div>
+        <div class="chat-ia">
+          <button class="mic-btn" id="micBtn" onclick="toggleMic()" title="Nhấn để nói">🎤</button>
+          <textarea class="chat-inp" id="chatInp" placeholder="Gõ tiếng Anh rồi nhấn Enter hoặc ➤" rows="1" onkeydown="onChatKey(event)" oninput="autoResize(this)"></textarea>
+          <button class="send-btn" onclick="sendMsg()">➤</button>
+        </div>
+        <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:6px">🎤 Cần Chrome/Edge để nói bằng mic · AI tự sửa lỗi ngữ pháp</div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+
+  <div class="tab-bar">
+    <button class="tab active" id="tab-test" onclick="switchTab('test')"><span class="tab-icon">🧪</span>Kiểm tra</button>
+    <button class="tab" id="tab-lesson" onclick="switchTab('lesson')"><span class="tab-icon">📚</span>Bài học</button>
+    <button class="tab" id="tab-quiz" onclick="switchTab('quiz')"><span class="tab-icon">✏️</span>Luyện tập</button>
+    <button class="tab" id="tab-conv" onclick="switchTab('conv')"><span class="tab-icon">💬</span>Hội thoại</button>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+const S = {
+  key: '', model: 'gemini-3.5-flash', level: 'B1',
+  testQs: [], testIdx: 0, testAns: [],
+  topic: 'Daily communication',
+  lesson: null,
+  quizData: null, quizType: '',
+  scenario: '', chatHist: [],
+};
+
+const LEVELS = {
+  A1:'Sơ cấp tuyệt đối — Bắt đầu học từ số 0.',
+  A2:'Sơ cấp — Giao tiếp trong các tình huống đơn giản.',
+  B1:'Trung cấp sơ — Trò chuyện về chủ đề quen thuộc.',
+  B2:'Trung cấp cao — Thảo luận và trình bày ý kiến.',
+  C1:'Nâng cao — Sử dụng tiếng Anh thành thạo.',
+};
+
+const SC_NAMES = {
+  airport:'✈️ Tại sân bay', hotel:'🏨 Tại khách sạn',
+  restaurant:'🍽️ Tại nhà hàng', interview:'💼 Phỏng vấn xin việc',
+  shopping:'🛒 Mua sắm', free:'🗣️ Trò chuyện tự do',
+};
+
+const SC_SYSTEM = {
+  airport:'You are a professional airline check-in agent at an international airport. The student is a passenger checking in.',
+  hotel:'You are a friendly hotel receptionist at a nice hotel. The student is a guest arriving to check in.',
+  restaurant:'You are an attentive waiter at a mid-range restaurant. The student is a customer.',
+  interview:'You are an experienced HR manager interviewing the student for a job position.',
+  shopping:'You are a helpful shop assistant in a clothing store. The student is a customer.',
+  free:'You are a friendly native English speaker having a casual conversation with the student.',
+};
+
+const SC_OPEN = {
+  airport:"Hello! Welcome to the check-in counter. May I see your passport and booking confirmation, please?",
+  hotel:"Good afternoon! Welcome to our hotel. Do you have a reservation with us today?",
+  restaurant:"Good evening! Welcome. Do you have a reservation, or would you like me to find you a table?",
+  interview:"Good morning! Thank you for coming in today. Please have a seat. Could you start by telling me a little about yourself?",
+  shopping:"Hi there! Welcome! Is there something specific you're looking for today, or just browsing?",
+  free:"Hey! Great to meet you! So, what have you been up to lately?",
+};
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+window.onload = () => {
+  const k = localStorage.getItem('g_key');
+  const m = localStorage.getItem('g_model');
+  const l = localStorage.getItem('g_level');
+  if (k) { S.key=k; S.model=m||'gemini-3.5-flash'; S.level=l||'B1'; launchApp(); }
+};
+
+function saveSettings() {
+  const k = document.getElementById('apiKeyInp').value.trim();
+  const m = document.getElementById('modelSel').value;
+  if (!k) { showErr('setErr','Vui lòng nhập API key.'); return; }
+  S.key=k; S.model=m;
+  localStorage.setItem('g_key',k);
+  localStorage.setItem('g_model',m);
+  launchApp();
+}
+
+function launchApp() {
+  document.getElementById('settingsScreen').style.display='none';
+  document.getElementById('mainApp').classList.add('active');
+  updateBadge();
+  document.getElementById('quizLvlNote').textContent = S.level;
+  const l = localStorage.getItem('g_level');
+  if (l) { S.level=l; updateBadge(); showPrevResult(); }
+}
+
+function showSettings() {
+  document.getElementById('mainApp').classList.remove('active');
+  document.getElementById('settingsScreen').style.display='flex';
+  document.getElementById('apiKeyInp').value=S.key;
+  document.getElementById('modelSel').value=S.model;
+}
+
+function updateBadge() {
+  document.getElementById('lvlBadge').textContent = S.level;
+  document.getElementById('quizLvlNote').textContent = S.level;
+}
+
+// ══════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════
+function switchTab(t) {
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('tab-'+t).classList.add('active');
+  document.getElementById('scr-'+t).classList.add('active');
+}
+
+// ══════════════════════════════════════════════
+// GEMINI API
+// ══════════════════════════════════════════════
+async function gemini(prompt, sys='', temp=0.7) {
+  const body = {
+    contents:[{parts:[{text:prompt}]}],
+    generationConfig:{temperature:temp, maxOutputTokens:8192}
+  };
+  if (sys) body.system_instruction={parts:[{text:sys}]};
+
+  const r = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${S.model}:generateContent?key=${S.key}`,
+    {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}
+  );
+  if (!r.ok) {
+    const e=await r.json();
+    const msg = e.error?.message||'';
+    if (msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED')) {
+      throw new Error('⏳ Vượt giới hạn free tier (20 lần/phút). Chờ 15 giây rồi thử lại!');
+    }
+    if (msg.includes('API_KEY') || msg.includes('invalid')) {
+      throw new Error('🔑 API key không hợp lệ. Vào ⚙️ cài đặt để kiểm tra lại.');
+    }
+    throw new Error(msg || 'Lỗi kết nối API');
+  }
+  const d = await r.json();
+  return d.candidates[0].content.parts[0].text;
+}
+
+async function geminiConv(hist, sys='') {
+  const contents = hist.map(m=>({role:m.r==='ai'?'model':'user', parts:[{text:m.t}]}));
+  const body = {contents, generationConfig:{temperature:0.8, maxOutputTokens:2048}};
+  if (sys) body.system_instruction={parts:[{text:sys}]};
+  const r = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${S.model}:generateContent?key=${S.key}`,
+    {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}
+  );
+  if (!r.ok) throw new Error('API error '+r.status);
+  const d = await r.json();
+  return d.candidates[0].content.parts[0].text;
+}
+
+function parseJ(txt) {
+  // Remove markdown code fences
+  let c = txt.replace(/```json\n?/gi,'').replace(/```\n?/gi,'').trim();
+  // Try to extract JSON array first, then object
+  try {
+    // Find the outermost [ ] or { }
+    const arrStart = c.indexOf('[');
+    const objStart = c.indexOf('{');
+    if (arrStart !== -1 && (objStart === -1 || arrStart < objStart)) {
+      // Find matching closing bracket
+      let depth=0, end=-1;
+      for(let i=arrStart;i<c.length;i++){
+        if(c[i]==='['&&(i===0||c[i-1]!=='\\')) depth++;
+        else if(c[i]===']'&&(i===0||c[i-1]!=='\\')) depth--;
+        if(depth===0){end=i;break;}
+      }
+      if(end>arrStart) c=c.substring(arrStart,end+1);
+    } else if(objStart !== -1) {
+      let depth=0, end=-1;
+      for(let i=objStart;i<c.length;i++){
+        if(c[i]==='{'&&(i===0||c[i-1]!=='\\')) depth++;
+        else if(c[i]==='}'&&(i===0||c[i-1]!=='\\')) depth--;
+        if(depth===0){end=i;break;}
+      }
+      if(end>objStart) c=c.substring(objStart,end+1);
+    }
+    return JSON.parse(c);
+  } catch(e) {
+    // Last resort: clean common issues and retry
+    c = c.replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ') // remove control chars
+         .replace(/,\s*([}\]])/g, '$1') // remove trailing commas
+         .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3'); // quote unquoted keys
+    return JSON.parse(c);
+  }
+}
+
+// ══════════════════════════════════════════════
+// SPEECH
+// ══════════════════════════════════════════════
+function speak(txt) {
+  if (!window.speechSynthesis) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(txt.replace(/💡.*$/s,'').trim());
+  u.lang='en-US'; u.rate=0.9;
+  speechSynthesis.speak(u);
+}
+
+let recog=null, isListening=false;
+function toggleMic() {
+  if (!('webkitSpeechRecognition' in window||'SpeechRecognition' in window)) {
+    alert('Mic cần Chrome hoặc Edge. Firefox chưa hỗ trợ tính năng này.');
+    return;
+  }
+  if (isListening) { recog?.stop(); return; }
+  const SR = window.SpeechRecognition||window.webkitSpeechRecognition;
+  recog = new SR(); recog.lang='en-US'; recog.continuous=false; recog.interimResults=true;
+  recog.onstart = ()=>{ isListening=true; document.getElementById('micBtn').classList.add('on'); document.getElementById('chatInp').placeholder='🎤 Đang nghe...'; };
+  recog.onresult = e=>{ document.getElementById('chatInp').value=[...e.results].map(r=>r[0].transcript).join(''); };
+  recog.onend = ()=>{
+    isListening=false; document.getElementById('micBtn').classList.remove('on');
+    document.getElementById('chatInp').placeholder='Gõ tiếng Anh rồi nhấn Enter hoặc ➤';
+    if (document.getElementById('chatInp').value.trim()) sendMsg();
+  };
+  recog.onerror = ()=>{ isListening=false; document.getElementById('micBtn').classList.remove('on'); };
+  recog.start();
+}
+
+// ══════════════════════════════════════════════
+// SCREEN 1: TEST
+// ══════════════════════════════════════════════
+async function startTest() {
+  toggle('testIntro',false); toggle('testRes',false); toggle('testLoad',true); toggle('testQs',false);
+  try {
+    const raw = await gemini(
+      `Create 10 English placement test questions, 2 per level (A1,A2,B1,B2,C1).
+Return ONLY JSON array, no markdown, no explanation:
+[{"q":"___","options":["A. ___","B. ___","C. ___","D. ___"],"answer":"A","level":"A1"}]
+Keep questions SHORT. Mix grammar and vocabulary. Return all 10 questions.`,
+      '', 0.3
+    );
+    S.testQs = parseJ(raw);
+    S.testIdx=0; S.testAns=[];
+    toggle('testLoad',false); toggle('testQs',true);
+    showQ();
+  } catch(e) {
+    toggle('testLoad',false); toggle('testIntro',true);
+    alert('Lỗi: '+e.message+'\n→ Kiểm tra API key và thử lại.');
+  }
+}
+
+function showQ() {
+  const q=S.testQs[S.testIdx], n=S.testQs.length, pct=(S.testIdx/n)*100;
+  document.getElementById('progFill').style.width=pct+'%';
+  document.getElementById('progLbl').textContent=`Câu ${S.testIdx+1}/${n}`;
+  document.getElementById('qText').textContent=q.q;
+  document.getElementById('optsBox').innerHTML=q.options.map((o,i)=>
+    `<button class="opt-btn" onclick="pickOpt(${i},'${o[0]}')">${o}</button>`
+  ).join('');
+}
+
+function pickOpt(idx, chosen) {
+  const q=S.testQs[S.testIdx];
+  S.testAns.push({c:chosen, ok:q.answer, lvl:q.level});
+  document.querySelectorAll('.opt-btn').forEach((b,i)=>{
+    b.disabled=true;
+    if (q.options[i][0]===q.answer) b.classList.add('correct');
+    else if (i===idx) b.classList.add('wrong');
+  });
+  setTimeout(()=>{
+    S.testIdx++;
+    if (S.testIdx<S.testQs.length) showQ();
+    else finishTest();
+  }, 750);
+}
+
+function finishTest() {
+  toggle('testQs',false);
+  const score = S.testAns.filter(a=>a.c===a.ok).length / S.testAns.length;
+  const lvl = score<0.3?'A1':score<0.5?'A2':score<0.65?'B1':score<0.8?'B2':'C1';
+  S.level=lvl;
+  localStorage.setItem('g_level',lvl);
+  updateBadge();
+  document.getElementById('resLvl').textContent=lvl;
+  document.getElementById('resDesc').textContent=LEVELS[lvl]||'';
+  document.getElementById('resScore').textContent=`Đúng ${S.testAns.filter(a=>a.c===a.ok).length}/${S.testAns.length} câu`;
+  toggle('testRes',true);
+}
+
+function showPrevResult() {
+  const el=document.getElementById('prevResult');
+  el.classList.remove('hidden');
+  document.getElementById('prevInfo').innerHTML=`
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="font-size:36px;font-weight:700;color:var(--primary)">${S.level}</div>
+      <div><div style="font-weight:500">${LEVELS[S.level]||''}</div><div style="font-size:12px;color:var(--muted)">Kết quả đã lưu</div></div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════
+// SCREEN 2: LESSON
+// ══════════════════════════════════════════════
+function pickTopic(btn) {
+  document.querySelectorAll('.topic-btn').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+  S.topic=btn.dataset.t;
+  loadLesson();
+}
+
+async function loadLesson() {
+  toggle('lessonLoad',true); toggle('lessonBody',false);
+  try {
+    const raw = await gemini(
+      `Create an English lesson for level ${S.level}, topic: "${S.topic}".
+CRITICAL: Return ONLY pure JSON. No markdown. No asterisks. No bullet points inside strings.
+{"vocabulary":[{"word":"hello","phonetic":"/həˈloʊ/","meaning_vi":"xin chào","example":"Hello, how are you?"}],"grammar":{"title":"Present Simple","explanation_vi":"Dùng để diễn tả thói quen hàng ngày.","examples":["I go to school every day.","She works in a hospital.","They play football on weekends."]},"reading":{"text":"Short passage here about the topic in 80-100 words.","questions":[{"q":"Question one?","answer":"Short answer."},{"q":"Question two?","answer":"Short answer."},{"q":"Question three?","answer":"Short answer."}]}}
+Follow exact structure above. 5 vocabulary words. All text plain, no special characters.`,
+      '', 0.3
+    );
+    S.lesson=parseJ(raw);
+    toggle('lessonLoad',false);
+    renderLesson();
+  } catch(e) {
+    toggle('lessonLoad',false);
+    alert('Lỗi tạo bài học: '+e.message);
+  }
+}
+
+function renderLesson() {
+  toggle('lessonTopics',false); toggle('lessonBody',true);
+  document.getElementById('topicChip').textContent=S.topic;
+  document.getElementById('lvlChip2').textContent='🎯 '+S.level;
+
+  // Vocab
+  document.getElementById('lt-vocab').innerHTML=S.lesson.vocabulary.map(v=>`
+    <div class="v-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div><div class="v-word">${v.word}</div><div class="v-phonetic">${v.phonetic||''}</div></div>
+        <button class="btn btn-outline btn-sm" onclick="speak('${esc(v.word)}')">🔊</button>
+      </div>
+      <div class="v-meaning">🇻🇳 ${v.meaning_vi}</div>
+      <div class="v-example">"${v.example}" <button class="speak-btn" onclick="speak('${esc(v.example)}')">🔊</button></div>
+    </div>`).join('');
+
+  // Grammar
+  const g=S.lesson.grammar;
+  document.getElementById('lt-gram').innerHTML=`
+    <div class="g-box">
+      <div class="g-title">📝 ${g.title}</div>
+      <div class="g-exp">${g.explanation_vi}</div>
+      <ul class="g-list">${g.examples.map(ex=>`<li>${ex} <button class="speak-btn" onclick="speak('${esc(ex)}')">🔊</button></li>`).join('')}</ul>
+    </div>`;
+
+  // Reading
+  const r=S.lesson.reading;
+  document.getElementById('lt-read').innerHTML=`
+    <div class="r-text">${r.text}</div>
+    <div class="sec-title">Câu hỏi đọc hiểu</div>
+    ${r.questions.map((rq,i)=>`
+      <div class="card">
+        <div style="font-weight:500;font-size:14px;margin-bottom:8px">${i+1}. ${rq.q}</div>
+        <button class="btn btn-outline btn-sm" onclick="toggleAns('ra${i}')">Xem đáp án</button>
+        <div id="ra${i}" class="hidden" style="margin-top:8px;padding:8px 12px;background:#ECFDF5;border-radius:7px;font-size:13px;color:#065F46">✅ ${rq.answer}</div>
+      </div>`).join('')}`;
+
+  showLTab('vocab', document.querySelector('.l-tab'));
+}
+
+function showLTab(tab, btn) {
+  document.querySelectorAll('.l-tab').forEach(t=>t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  ['vocab','gram','read'].forEach(t=>document.getElementById('lt-'+t).classList.toggle('hidden',t!==tab));
+}
+
+function backToTopics() {
+  toggle('lessonTopics',true); toggle('lessonBody',false);
+}
+
+// ══════════════════════════════════════════════
+// SCREEN 3: QUIZ
+// ══════════════════════════════════════════════
+async function runQuiz(type) {
+  S.quizType=type;
+  toggle('quizMenu',false); toggle('quizLoad',true); toggle('quizBody',false);
+  const topic=S.topic||'Daily communication';
+
+  const prompts = {
+    mc:`Create 5 multiple-choice English questions for ${S.level} level, topic "${topic}".
+Return ONLY JSON array:
+[{"q":"Question?","options":["A. opt","B. opt","C. opt","D. opt"],"answer":"A","exp":"Brief Vietnamese explanation"}]`,
+    fill:`Create 5 fill-in-the-blank sentences for ${S.level} level, topic "${topic}".
+Return ONLY JSON array:
+[{"s":"I ___ to school every day.","ans":"go","hint":"Thì hiện tại đơn"}]`,
+    trans:`Create 5 Vietnamese-to-English translation tasks for ${S.level} level, topic "${topic}".
+Return ONLY JSON array:
+[{"vi":"Câu tiếng Việt.","en":"The English answer."}]`,
+    dict:`Create 5 clear English sentences for dictation at ${S.level} level, topic "${topic}". 8-12 words each.
+Return ONLY a JSON array of strings: ["sentence one","sentence two","sentence three","sentence four","sentence five"]`,
+  };
+
+  try {
+    const raw = await gemini(prompts[type],'',0.3);
+    S.quizData=parseJ(raw);
+    toggle('quizLoad',false);
+    renderQuiz(type);
+  } catch(e) {
+    toggle('quizLoad',false); toggle('quizMenu',true);
+    alert('Lỗi tạo bài tập: '+e.message);
+  }
+}
+
+function renderQuiz(type) {
+  toggle('quizBody',true);
+  const names={mc:'Trắc nghiệm',fill:'Điền chỗ trống',trans:'Dịch câu',dict:'Nghe chép'};
+  let h=`<div class="row" style="margin-bottom:12px">
+    <span class="chip chip-blue">${names[type]}</span>
+    <span class="chip chip-green">${S.level}</span>
+    <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="backQuiz()">← Đổi dạng</button>
+  </div>`;
+
+  if (type==='mc') {
+    h+=S.quizData.map((q,i)=>`
+      <div class="card" id="mcq${i}">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Câu ${i+1}/5</div>
+        <div style="font-weight:500;margin-bottom:12px">${q.q}</div>
+        <div class="opts">${q.options.map((o,j)=>`<button class="opt-btn" onclick="chkMC(${i},${j},'${o[0]}','${q.answer}')">${o}</button>`).join('')}</div>
+        <div id="exp${i}" class="hidden" style="margin-top:10px;padding:9px 12px;background:#F0FDF4;border-radius:7px;font-size:13px;color:#166534">💡 ${q.exp}</div>
+      </div>`).join('');
+  } else if (type==='fill') {
+    h+=S.quizData.map((q,i)=>`
+      <div class="card">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Câu ${i+1}/5</div>
+        <div style="font-size:15px;margin-bottom:6px">${q.s.replace('___',`<input class="inline-inp" id="fi${i}" placeholder="...">`)} </div>
+        <div style="font-size:12px;color:var(--muted)">Gợi ý: ${q.hint}</div>
+        <div id="fb${i}" class="hidden" style="margin-top:8px;font-size:13px"></div>
+      </div>`).join('');
+    h+=`<button class="btn btn-primary" style="margin-top:4px" onclick="chkFill()">✅ Kiểm tra đáp án</button>`;
+  } else if (type==='trans') {
+    h+=S.quizData.map((q,i)=>`
+      <div class="card">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Câu ${i+1}/5</div>
+        <div style="font-weight:500;margin-bottom:8px">🇻🇳 ${q.vi}</div>
+        <textarea class="fill-inp" id="ti${i}" placeholder="Dịch sang tiếng Anh..." rows="2"></textarea>
+        <div id="tf${i}" class="hidden" style="margin-top:8px;font-size:13px"></div>
+      </div>`).join('');
+    h+=`<button class="btn btn-primary" style="margin-top:4px" onclick="chkTrans()">📝 Chấm bài</button>`;
+  } else {
+    h+=`<div class="card" style="text-align:center;padding:16px;margin-bottom:12px"><div style="color:var(--muted);font-size:14px">Nhấn 🔊 để nghe, rồi gõ lại những gì bạn nghe</div></div>`;
+    h+=S.quizData.map((s,i)=>`
+      <div class="card">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Câu ${i+1}/5</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <button class="btn btn-outline btn-sm" onclick="speak('${esc(s)}')">🔊 Nghe</button>
+          <button class="btn btn-outline btn-sm" onclick="speak('${esc(s)}')">🔊 Nghe lại</button>
+        </div>
+        <input type="text" class="fill-inp" id="di${i}" placeholder="Gõ lại câu bạn vừa nghe...">
+        <div id="df${i}" class="hidden" style="margin-top:8px;font-size:13px"></div>
+      </div>`).join('');
+    h+=`<button class="btn btn-primary" style="margin-top:4px" onclick="chkDict()">✅ Kiểm tra</button>`;
+  }
+
+  document.getElementById('quizBody').innerHTML=h;
+}
+
+function chkMC(qi,optI,chosen,correct) {
+  document.querySelectorAll(`#mcq${qi} .opt-btn`).forEach((b,i)=>{
+    b.disabled=true;
+    if (S.quizData[qi].options[i][0]===correct) b.classList.add('correct');
+    else if (i===optI) b.classList.add('wrong');
+  });
+  document.getElementById('exp'+qi).classList.remove('hidden');
+}
+
+function chkFill() {
+  S.quizData.forEach((q,i)=>{
+    const inp=document.getElementById('fi'+i);
+    if (!inp) return;
+    const val=inp.value.trim().toLowerCase(), ans=q.ans.toLowerCase();
+    const ok=val===ans||val.replace(/[^a-z]/g,'')===(ans.replace(/[^a-z]/g,''));
+    inp.classList.add(ok?'correct':'wrong'); inp.disabled=true;
+    const fb=document.getElementById('fb'+i);
+    fb.innerHTML=ok?'<span style="color:var(--success)">✅ Chính xác!</span>':`<span style="color:var(--danger)">❌ Đáp án đúng: <strong>${q.ans}</strong></span>`;
+    fb.classList.remove('hidden');
+  });
+}
+
+async function chkTrans() {
+  const btn=document.querySelector('[onclick="chkTrans()"]');
+  btn.textContent='Đang chấm...'; btn.disabled=true;
+  for (let i=0;i<S.quizData.length;i++) {
+    const ua=document.getElementById('ti'+i)?.value.trim();
+    const model=S.quizData[i].en;
+    const fb=document.getElementById('tf'+i);
+    if (!ua) { fb.innerHTML=`<span style="color:var(--muted)">Bỏ qua — Đáp án mẫu: <em>${model}</em></span>`; fb.classList.remove('hidden'); continue; }
+    try {
+      const raw=await gemini(`A ${S.level} student translated: "${ua}". Model answer: "${model}". Rate 1-10 and give 1 feedback sentence in Vietnamese. Return ONLY JSON: {"score":7,"fb":"Nhận xét..."}`, '', 0.3);
+      const r=parseJ(raw);
+      const col=r.score>=7?'var(--success)':r.score>=4?'var(--warning)':'var(--danger)';
+      fb.innerHTML=`<span style="color:${col}">Điểm: ${r.score}/10 — ${r.fb}</span><br><span style="font-size:12px;color:var(--muted)">Mẫu: <em>${model}</em></span>`;
+    } catch { fb.innerHTML=`<span style="color:var(--muted)">Đáp án mẫu: <em>${model}</em></span>`; }
+    fb.classList.remove('hidden');
+  }
+  btn.textContent='✅ Đã chấm xong';
+}
+
+function chkDict() {
+  S.quizData.forEach((sent,i)=>{
+    const inp=document.getElementById('di'+i);
+    if (!inp) return;
+    const val=inp.value.trim().toLowerCase().replace(/[^a-z\s]/g,'');
+    const ans=sent.toLowerCase().replace(/[^a-z\s]/g,'');
+    const vw=val.split(/\s+/), aw=ans.split(/\s+/);
+    const ok=aw.filter((w,j)=>vw[j]===w).length;
+    const pct=Math.round((ok/aw.length)*100);
+    const hl=aw.map((w,j)=>`<span style="color:${vw[j]===w?'var(--success)':'var(--danger)'}">${w}</span>`).join(' ');
+    const fb=document.getElementById('df'+i);
+    fb.innerHTML=pct===100?'<span style="color:var(--success)">✅ Hoàn hảo!</span>':`${pct>=80?'⭐':pct>=60?'📝':'❌'} Đúng ${pct}% — <span style="font-size:12px">Câu đúng: ${hl}</span>`;
+    fb.classList.remove('hidden'); inp.disabled=true;
+  });
+}
+
+function backQuiz() { toggle('quizBody',false); toggle('quizMenu',true); }
+
+// ══════════════════════════════════════════════
+// SCREEN 4: CONVERSATION
+// ══════════════════════════════════════════════
+function pickScenario(btn) {
+  document.querySelectorAll('.sc-btn').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+  S.scenario=btn.dataset.sc;
+  startChat();
+}
+
+function startChat() {
+  S.chatHist=[];
+  toggle('scPick',false); toggle('chatUI',true);
+  document.getElementById('scChip').textContent=SC_NAMES[S.scenario]||S.scenario;
+  document.getElementById('lvlChip3').textContent='🎯 '+S.level;
+  document.getElementById('chatWin').innerHTML='';
+  const opening=SC_OPEN[S.scenario]||"Hello! Let's practice English. How are you?";
+  addMsg('ai',opening);
+  speak(opening);
+  S.chatHist.push({r:'ai',t:opening});
+}
+
+function backToScenarios() { toggle('chatUI',false); toggle('scPick',true); }
+
+function addMsg(role, txt) {
+  const win=document.getElementById('chatWin');
+  const parts=txt.split('💡 Correction:');
+  const main=parts[0].trim();
+  const corr=parts[1]?parts[1].trim():'';
+  const d=document.createElement('div');
+  d.className='msg '+role;
+  d.innerHTML=`
+    <div class="msg-av">${role==='ai'?'🤖':'👤'}</div>
+    <div>
+      <div class="bubble">${main}${role==='ai'?` <button class="speak-btn" onclick="speak('${esc(main)}')">🔊</button>`:''}
+      </div>
+      ${corr?`<div class="correction">💡 ${corr}</div>`:''}
+    </div>`;
+  win.appendChild(d);
+  win.scrollTop=win.scrollHeight;
+}
+
+function onChatKey(e) { if (e.key==='Enter'&&!e.shiftKey) { e.preventDefault(); sendMsg(); } }
+function autoResize(el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,110)+'px'; }
+
+async function sendMsg() {
+  const inp=document.getElementById('chatInp');
+  const txt=inp.value.trim();
+  if (!txt) return;
+  inp.value=''; inp.style.height='auto';
+  addMsg('user',txt);
+  S.chatHist.push({r:'user',t:txt});
+  toggle('convLoad',true);
+
+  const sys=`${SC_SYSTEM[S.scenario]||'You are a friendly English conversation partner.'}
+
+Student's English level: ${S.level}.
+CRITICAL RULES:
+1. Stay fully in character for this scenario — never break it
+2. Keep responses SHORT: 1-3 natural sentences maximum
+3. Use vocabulary appropriate for ${S.level} level
+4. If student makes a grammar/vocabulary error, FIRST reply naturally, THEN on a new line write exactly: "💡 Correction: [short correction in simple English]"
+5. If student writes in Vietnamese, gently encourage them to try in English
+6. Do NOT act as a teacher — only use the "💡 Correction:" line for corrections`;
+
+  try {
+    const reply=await geminiConv(S.chatHist, sys);
+    toggle('convLoad',false);
+    addMsg('ai',reply);
+    S.chatHist.push({r:'ai',t:reply});
+    speak(reply.split('💡 Correction:')[0]);
+    if (S.chatHist.length>20) S.chatHist=S.chatHist.slice(-18);
+  } catch(e) {
+    toggle('convLoad',false);
+    addMsg('ai','⚠️ Lỗi kết nối. Thử lại nhé!');
+  }
+}
+
+async function doSummary() {
+  const userMsgs=S.chatHist.filter(m=>m.r==='user').map(m=>m.t);
+  if (userMsgs.length<2) { alert('Hãy trò chuyện thêm để có tổng kết ý nghĩa nhé!'); return; }
+  toggle('convLoad',true);
+  try {
+    const raw=await gemini(
+      `A ${S.level} English learner said these during a conversation:\n"${userMsgs.join('"\n"')}"\n\nWrite a short, encouraging assessment in Vietnamese (4-6 sentences) covering: ✅ Điểm tốt, ⚠️ Lỗi cần sửa (with corrections), 💡 Lời khuyên cải thiện.`,
+      '', 0.5
+    );
+    toggle('convLoad',false);
+    addMsg('ai','📊 Tổng kết phiên học:\n'+raw);
+  } catch(e) {
+    toggle('convLoad',false);
+    addMsg('ai','⚠️ Không thể tổng kết: '+e.message);
+  }
+}
+
+// ══════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════
+function toggle(id, show) { document.getElementById(id).classList.toggle('hidden',!show); }
+function toggleAns(id) { const el=document.getElementById(id); el.style.display=el.style.display==='block'?'none':'block'; }
+function showErr(id,msg) { const e=document.getElementById(id); if(e){e.textContent=msg;e.classList.remove('hidden');} }
+function esc(s) { return (s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'\\"'); }
+</script>
+</body>
+</html>
