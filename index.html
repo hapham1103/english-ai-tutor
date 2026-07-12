@@ -872,3 +872,13 @@ async function doSummary() {
   }
 }
 
+// ══════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════
+function toggle(id, show) { document.getElementById(id).classList.toggle('hidden',!show); }
+function toggleAns(id) { const el=document.getElementById(id); el.style.display=el.style.display==='block'?'none':'block'; }
+function showErr(id,msg) { const e=document.getElementById(id); if(e){e.textContent=msg;e.classList.remove('hidden');} }
+function esc(s) { return (s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'\\"'); }
+</script>
+</body>
+</html>
