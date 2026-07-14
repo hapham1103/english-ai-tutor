@@ -289,7 +289,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
           <span class="chip chip-blue" id="scChip"></span>
           <span class="chip chip-green" id="lvlChip3"></span>
           <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="backToScenarios()">← Đổi</button>
-          <button class="btn btn-outline btn-sm" onclick="doSummary()">📊 Tổng kết</button>
+          <button class="btn btn-outline btn-sm" onclick="checkErrors()" title="Kiểm tra và sửa lỗi trong cuộc hội thoại">🔍 Sửa lỗi</button>
+          <button class="btn btn-outline btn-sm" onclick="doSummary()" title="Tổng kết toàn bộ phiên học">📊 Tổng kết</button>
         </div>
         <div class="chat-win" id="chatWin"></div>
         <div id="convLoad" class="hidden"><div class="loading" style="padding:8px"><div class="dots"><span></span><span></span><span></span></div></div></div>
@@ -298,7 +299,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
           <textarea class="chat-inp" id="chatInp" placeholder="Gõ tiếng Anh rồi nhấn Enter hoặc ➤" rows="1" onkeydown="onChatKey(event)" oninput="autoResize(this)"></textarea>
           <button class="send-btn" onclick="sendMsg()">➤</button>
         </div>
-        <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:6px">🎤 Cần Chrome/Edge để nói bằng mic · AI tự sửa lỗi ngữ pháp</div>
+        <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:6px">🎤 Cần Chrome/Edge để nói bằng mic · Gõ <strong>"sửa lỗi cho tôi"</strong> hoặc nhấn 🔍 để xem lỗi</div>
       </div>
     </div>
 
@@ -340,12 +341,12 @@ const SC_NAMES = {
 };
 
 const SC_SYSTEM = {
-  airport:'You are a professional airline check-in agent at an international airport. The student is a passenger checking in.',
-  hotel:'You are a friendly hotel receptionist at a nice hotel. The student is a guest arriving to check in.',
-  restaurant:'You are an attentive waiter at a mid-range restaurant. The student is a customer.',
-  interview:'You are an experienced HR manager interviewing the student for a job position.',
-  shopping:'You are a helpful shop assistant in a clothing store. The student is a customer.',
-  free:'You are a friendly native English speaker having a casual conversation with the student.',
+  airport:'You are a friendly airline check-in agent at an international airport. The student is a passenger. Have a NATURAL conversation — respond to what they say, ask follow-up questions. Do NOT correct their English errors. Just understand their meaning and respond naturally.',
+  hotel:'You are a friendly hotel receptionist. The student is a guest. Have a NATURAL conversation — respond warmly and helpfully. Do NOT correct their English errors. Just understand their meaning and respond naturally.',
+  restaurant:'You are an attentive waiter at a nice restaurant. The student is a customer. Have a NATURAL conversation — take their order, answer questions. Do NOT correct their English errors. Just understand their meaning and respond naturally.',
+  interview:'You are an experienced HR manager interviewing the student. Have a NATURAL professional conversation. Do NOT correct their English errors. Just listen and respond to their answers naturally.',
+  shopping:'You are a helpful shop assistant. The student is a customer. Have a NATURAL conversation — help them find what they need. Do NOT correct their English errors. Just understand their meaning and respond naturally.',
+  free:'You are a friendly native English speaker having a casual chat. Topics: hobbies, travel, daily life, plans. Have a NATURAL conversation. Do NOT correct their English errors. Just respond warmly and naturally.',
 };
 
 const SC_OPEN = {
@@ -836,20 +837,21 @@ function startChat() {
 
 function backToScenarios() { toggle('chatUI',false); toggle('scPick',true); }
 
-function addMsg(role, txt) {
+function addMsg(role, txt, isSystem=false) {
   const win=document.getElementById('chatWin');
-  const parts=txt.split('💡 Correction:');
-  const main=parts[0].trim();
-  const corr=parts[1]?parts[1].trim():'';
   const d=document.createElement('div');
-  d.className='msg '+role;
-  d.innerHTML=`
-    <div class="msg-av">${role==='ai'?'🤖':'👤'}</div>
-    <div>
-      <div class="bubble">${main}${role==='ai'?` <button class="speak-btn" onclick="speak('${esc(main)}')">🔊</button>`:''}
-      </div>
-      ${corr?`<div class="correction">💡 ${corr}</div>`:''}
-    </div>`;
+  if (isSystem) {
+    d.style.cssText='text-align:center;padding:8px 12px;margin:4px 0';
+    d.innerHTML=`<span style="font-size:12px;color:var(--muted);background:var(--surface-1);padding:5px 12px;border-radius:20px;border:.5px solid var(--border)">${txt}</span>`;
+  } else {
+    d.className='msg '+role;
+    d.innerHTML=`
+      <div class="msg-av">${role==='ai'?'🤖':'👤'}</div>
+      <div>
+        <div class="bubble">${txt}${role==='ai'?` <button class="speak-btn" onclick="speak('${esc(txt)}')">🔊</button>`:''}
+        </div>
+      </div>`;
+  }
   win.appendChild(d);
   win.scrollTop=win.scrollHeight;
 }
@@ -862,50 +864,141 @@ async function sendMsg() {
   const txt=inp.value.trim();
   if (!txt) return;
   inp.value=''; inp.style.height='auto';
+
+  // Detect if user asks for error correction mid-conversation
+  const errReq=['sửa lỗi','kiểm tra lỗi','check my error','correct me','lỗi của tôi','tôi sai','fix my english','review my'];
+  if (errReq.some(k=>txt.toLowerCase().includes(k))) {
+    addMsg('user',txt);
+    S.chatHist.push({r:'user',t:txt});
+    checkErrors();
+    return;
+  }
+
   addMsg('user',txt);
   S.chatHist.push({r:'user',t:txt});
   toggle('convLoad',true);
 
   const sys=`${SC_SYSTEM[S.scenario]||'You are a friendly English conversation partner.'}
 
-Student's English level: ${S.level}.
-CRITICAL RULES:
-1. Stay fully in character for this scenario — never break it
-2. Keep responses SHORT: 1-3 natural sentences maximum
-3. Use vocabulary appropriate for ${S.level} level
-4. If student makes a grammar/vocabulary error, FIRST reply naturally, THEN on a new line write exactly: "💡 Correction: [short correction in simple English]"
-5. If student writes in Vietnamese, gently encourage them to try in English
-6. Do NOT act as a teacher — only use the "💡 Correction:" line for corrections`;
+Student level: ${S.level}.
+IMPORTANT RULES:
+1. You are a NATIVE SPEAKER in this scenario, NOT a teacher — stay in character completely
+2. Respond NATURALLY and BRIEFLY (1-3 sentences) like a real person would
+3. Focus entirely on the MEANING of what they say — ignore grammar mistakes
+4. NEVER correct grammar, vocabulary, or pronunciation — that will happen separately later
+5. If their message is unclear, ask for clarification naturally ("Sorry, do you mean...?")
+6. If they write in Vietnamese, respond: "Let's keep it in English! Try saying it in English 😊"`;
 
   try {
     const reply=await geminiConv(S.chatHist, sys);
     toggle('convLoad',false);
     addMsg('ai',reply);
     S.chatHist.push({r:'ai',t:reply});
-    speak(reply.split('💡 Correction:')[0]);
-    if (S.chatHist.length>20) S.chatHist=S.chatHist.slice(-18);
+    speak(reply);
+    if (S.chatHist.length>30) S.chatHist=S.chatHist.slice(-28);
   } catch(e) {
     toggle('convLoad',false);
-    addMsg('ai','⚠️ Lỗi kết nối. Thử lại nhé!');
+    addMsg('ai','⚠️ '+e.message);
+  }
+}
+
+async function checkErrors() {
+  const userMsgs=S.chatHist.filter(m=>m.r==='user').map(m=>m.t);
+  if (userMsgs.length<1) {
+    addMsg('ai','Hãy nói chuyện thêm một chút rồi tôi sẽ kiểm tra lỗi cho bạn nhé! 😊', false);
+    return;
+  }
+  addMsg('ai','🔍 Đang phân tích lỗi trong cuộc hội thoại...', false);
+  toggle('convLoad',true);
+  try {
+    const prompt=`You are an expert English teacher reviewing a student's conversation.
+Student level: ${S.level}. Scenario: ${SC_NAMES[S.scenario]||S.scenario}.
+
+Student said these sentences:
+${userMsgs.map((m,i)=>`${i+1}. "${m}"`).join('\n')}
+
+Write a feedback report in Vietnamese with this exact format:
+
+✅ ĐIỂM TỐT:
+[1-2 things the student did well]
+
+⚠️ LỖI CẦN SỬA:
+[For each error found, write:]
+❌ Câu sai: "[the wrong sentence]"
+✅ Câu đúng: "[the correct version]"
+📝 Giải thích: [brief explanation in Vietnamese why it's wrong]
+
+💡 GỢI Ý:
+[1-2 specific tips to improve]
+
+If there are no errors, say "Tuyệt vời! Không có lỗi đáng kể 🎉" and give positive feedback.
+Be encouraging and specific. Focus on the most important errors only (max 4).`;
+
+    const raw=await gemini(prompt,'',0.4);
+    toggle('convLoad',false);
+    // Show as a special review message
+    const win=document.getElementById('chatWin');
+    const d=document.createElement('div');
+    d.style.cssText='margin:8px 0;padding:14px;background:var(--surface-1);border-radius:12px;border:.5px solid var(--border);font-size:13px;line-height:1.8';
+    d.innerHTML=`<div style="font-weight:600;color:var(--primary);margin-bottom:8px;font-size:14px">🔍 Phân tích lỗi của bạn</div><div style="white-space:pre-wrap;color:var(--text)">${raw}</div><div style="margin-top:10px;font-size:11px;color:var(--muted)">Tiếp tục hội thoại bên dưới 👇</div>`;
+    win.appendChild(d);
+    win.scrollTop=win.scrollHeight;
+  } catch(e) {
+    toggle('convLoad',false);
+    addMsg('ai','⚠️ '+e.message);
   }
 }
 
 async function doSummary() {
   const userMsgs=S.chatHist.filter(m=>m.r==='user').map(m=>m.t);
-  if (userMsgs.length<2) { alert('Hãy trò chuyện thêm để có tổng kết ý nghĩa nhé!'); return; }
+  if (userMsgs.length<2) {
+    alert('Hãy trò chuyện thêm để có tổng kết ý nghĩa nhé!');
+    return;
+  }
+  addMsg('ai','📊 Đang tổng kết toàn bộ phiên học...', false);
   toggle('convLoad',true);
   try {
-    const raw=await gemini(
-      `A ${S.level} English learner said these during a conversation:\n"${userMsgs.join('"\n"')}"\n\nWrite a short, encouraging assessment in Vietnamese (4-6 sentences) covering: ✅ Điểm tốt, ⚠️ Lỗi cần sửa (with corrections), 💡 Lời khuyên cải thiện.`,
-      '', 0.5
-    );
+    const prompt=`You are an expert English teacher. A ${S.level} student just finished a conversation practice session.
+Topic: ${SC_NAMES[S.scenario]||S.scenario}
+Number of student messages: ${userMsgs.length}
+
+Student's messages:
+${userMsgs.map((m,i)=>`${i+1}. "${m}"`).join('\n')}
+
+Write a comprehensive session summary in Vietnamese with this format:
+
+📊 TỔNG KẾT PHIÊN HỌC
+
+🎯 TRÌNH ĐỘ HIỂN THỊ: [Assessment of their actual level based on this conversation]
+
+✅ ĐIỂM MẠNH:
+[2-3 genuine strengths observed]
+
+⚠️ LỖI PHỔ BIẾN:
+[List each error with wrong → correct version and brief explanation]
+
+📈 TIẾN BỘ SO VỚI CẤP ĐỘ ${S.level}:
+[How well they performed relative to their level, percentage or rating]
+
+💡 BÀI TẬP ĐỀ NGHỊ:
+[2-3 specific exercises to address their weak points]
+
+🏆 NHẬN XÉT CHUNG: [1-2 encouraging sentences]`;
+
+    const raw=await gemini(prompt,'',0.4);
     toggle('convLoad',false);
-    addMsg('ai','📊 Tổng kết phiên học:\n'+raw);
+    const win=document.getElementById('chatWin');
+    const d=document.createElement('div');
+    d.style.cssText='margin:8px 0;padding:16px;background:linear-gradient(135deg,#EFF6FF,#F0FDF4);border-radius:12px;border:.5px solid var(--border);font-size:13px;line-height:1.9';
+    d.innerHTML=`<div style="white-space:pre-wrap;color:var(--text)">${raw}</div>`;
+    win.appendChild(d);
+    win.scrollTop=win.scrollHeight;
   } catch(e) {
     toggle('convLoad',false);
-    addMsg('ai','⚠️ Không thể tổng kết: '+e.message);
+    addMsg('ai','⚠️ '+e.message);
   }
 }
+
 
 // ══════════════════════════════════════════════
 // UTILS
