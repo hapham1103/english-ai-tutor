@@ -53,7 +53,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
 .h-right { display: flex; align-items: center; gap: 8px; }
 .level-badge { font-size: 11px; background: var(--primary); color: #fff; padding: 3px 9px; border-radius: 20px; font-weight: 600; }
 .content { flex: 1; padding: 14px; max-width: 700px; margin: 0 auto; width: 100%; overflow-y: auto; }
-.tab-bar { background: var(--surface); border-top: 1px solid var(--border); display: grid; grid-template-columns: repeat(4,1fr); position: sticky; bottom: 0; }
+.tab-bar { background: var(--surface); border-top: 1px solid var(--border); display: grid; grid-template-columns: repeat(5,1fr); position: sticky; bottom: 0; }
 .tab { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 9px 4px; cursor: pointer; font-size: 11px; color: var(--muted); border: none; background: none; font-family: inherit; transition: color .15s; }
 .tab.active { color: var(--primary); }
 .tab-icon { font-size: 20px; }
@@ -154,15 +154,22 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
   <div class="s-card">
     <div class="s-logo">🎓</div>
     <div class="s-title">English AI Tutor</div>
-    <div class="s-sub">Học tiếng Anh thông minh cùng Gemini AI · Hoàn toàn miễn phí</div>
+    <div class="s-sub">Học tiếng Anh thông minh cùng AI · Hoàn toàn miễn phí</div>
 
-    <label>🔑 Gemini API Key</label>
+    <label>🤖 Chọn nhà cung cấp AI</label>
+    <select id="providerSel" onchange="onProviderChange()">
+      <option value="gemini">Google Gemini</option>
+      <option value="openai">OpenAI (GPT)</option>
+      <option value="claude">Anthropic (Claude)</option>
+    </select>
+
+    <label id="keyLabel">🔑 Gemini API Key</label>
     <input type="password" id="apiKeyInp" placeholder="Dán API key vào đây (bắt đầu bằng AIza...)">
-    <div class="hint">Lấy miễn phí tại <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--primary)">aistudio.google.com/apikey</a></div>
+    <div class="hint" id="keyHint">Lấy miễn phí tại <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--primary)">aistudio.google.com/apikey</a></div>
 
-    <label>🤖 Tên Model Gemini (gõ chính xác)</label>
+    <label id="modelLabel">🤖 Tên Model (gõ chính xác)</label>
     <input type="text" id="modelSel" placeholder="gemini-3.5-flash" value="gemini-3.5-flash">
-    <div class="hint">✅ Model của bạn là <strong>gemini-3.5-flash</strong> — đã xác nhận đúng từ lỗi API</div>
+    <div class="hint" id="modelHint">✅ Model của bạn là <strong>gemini-3.5-flash</strong></div>
 
     <div id="setErr" class="hidden" style="margin-top:12px;padding:10px 14px;background:#FEF2F2;border-radius:8px;color:#991B1B;font-size:13px;border:1px solid #FECACA"></div>
     <button class="btn btn-primary btn-block" onclick="saveSettings()">🚀 Bắt đầu học</button>
@@ -303,6 +310,24 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
       </div>
     </div>
 
+    <!-- ── SCREEN: NOTEBOOK ── -->
+    <div class="screen" id="scr-notebook">
+      <div class="row" style="margin-bottom:12px">
+        <div class="sec-title" style="border:none;margin:0;padding:0;flex:1">📓 Sổ tay của tôi</div>
+        <button class="btn btn-outline btn-sm" onclick="clearNotebook()">🗑️ Xoá hết</button>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
+        <div class="sec-title">📈 Tiến trình học</div>
+        <div id="progressBox"></div>
+      </div>
+
+      <div class="card">
+        <div class="sec-title">❌ Lỗi hay mắc phải</div>
+        <div id="errorNotebook"></div>
+      </div>
+    </div>
+
   </div><!-- /content -->
 
   <div class="tab-bar">
@@ -310,6 +335,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
     <button class="tab" id="tab-lesson" onclick="switchTab('lesson')"><span class="tab-icon">📚</span>Bài học</button>
     <button class="tab" id="tab-quiz" onclick="switchTab('quiz')"><span class="tab-icon">✏️</span>Luyện tập</button>
     <button class="tab" id="tab-conv" onclick="switchTab('conv')"><span class="tab-icon">💬</span>Hội thoại</button>
+    <button class="tab" id="tab-notebook" onclick="switchTab('notebook')"><span class="tab-icon">📓</span>Sổ tay</button>
   </div>
 </div>
 
@@ -318,12 +344,19 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
 // STATE
 // ══════════════════════════════════════════════
 const S = {
-  key: '', model: 'gemini-3.5-flash', level: 'B1',
+  key: '', model: 'gemini-3.5-flash', provider: 'gemini', level: 'B1',
   testQs: [], testIdx: 0, testAns: [],
   topic: 'Daily communication',
   lesson: null,
   quizData: null, quizType: '',
   scenario: '', chatHist: [],
+  quizScores: [], // track recent quiz results for auto level-up
+};
+
+const PROVIDER_DEFAULTS = {
+  gemini: { model:'gemini-3.5-flash', keyPlaceholder:'Dán API key (AIza...)', keyHint:'Lấy miễn phí tại <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--primary)">aistudio.google.com/apikey</a>', modelHint:'Ví dụ: gemini-3.5-flash, gemini-2.0-flash' },
+  openai: { model:'gpt-4o-mini', keyPlaceholder:'Dán API key (sk-...)', keyHint:'Lấy tại <a href="https://platform.openai.com/api-keys" target="_blank" style="color:var(--primary)">platform.openai.com/api-keys</a>', modelHint:'Ví dụ: gpt-4o-mini, gpt-4o' },
+  claude: { model:'claude-sonnet-4-6', keyPlaceholder:'Dán API key (sk-ant-...)', keyHint:'Lấy tại <a href="https://console.anthropic.com" target="_blank" style="color:var(--primary)">console.anthropic.com</a>', modelHint:'Ví dụ: claude-sonnet-4-6, claude-haiku-4-5' },
 };
 
 const LEVELS = {
@@ -333,6 +366,7 @@ const LEVELS = {
   B2:'Trung cấp cao — Thảo luận và trình bày ý kiến.',
   C1:'Nâng cao — Sử dụng tiếng Anh thành thạo.',
 };
+const LEVEL_ORDER = ['A1','A2','B1','B2','C1'];
 
 const SC_NAMES = {
   airport:'✈️ Tại sân bay', hotel:'🏨 Tại khách sạn',
@@ -359,22 +393,84 @@ const SC_OPEN = {
 };
 
 // ══════════════════════════════════════════════
+// PERSISTENT STORAGE HELPERS
+// ══════════════════════════════════════════════
+function getConvHistory() { try { return JSON.parse(localStorage.getItem('conv_history')||'[]'); } catch { return []; } }
+function saveConvSession(scenario, messages) {
+  const hist = getConvHistory();
+  hist.push({ date: new Date().toISOString(), scenario, messages: messages.filter(m=>m.r==='user').length, preview: messages.find(m=>m.r==='user')?.t || '' });
+  if (hist.length>30) hist.shift();
+  localStorage.setItem('conv_history', JSON.stringify(hist));
+}
+
+function getErrorNotebook() { try { return JSON.parse(localStorage.getItem('error_notebook')||'[]'); } catch { return []; } }
+function addToErrorNotebook(errors) {
+  const nb = getErrorNotebook();
+  errors.forEach(e=>nb.unshift({...e, date:new Date().toISOString()}));
+  localStorage.setItem('error_notebook', JSON.stringify(nb.slice(0,50)));
+}
+function clearNotebook() {
+  if (!confirm('Xoá toàn bộ sổ tay và lịch sử? Không thể hoàn tác.')) return;
+  localStorage.removeItem('error_notebook');
+  localStorage.removeItem('conv_history');
+  localStorage.removeItem('quiz_scores');
+  renderNotebook();
+}
+
+function getQuizScores() { try { return JSON.parse(localStorage.getItem('quiz_scores')||'[]'); } catch { return []; } }
+function addQuizScore(pct) {
+  const scores = getQuizScores();
+  scores.push({ date:new Date().toISOString(), level:S.level, pct });
+  localStorage.setItem('quiz_scores', JSON.stringify(scores.slice(-20)));
+  checkAutoLevelUp();
+}
+function checkAutoLevelUp() {
+  const scores = getQuizScores().filter(s=>s.level===S.level);
+  const recent = scores.slice(-3);
+  if (recent.length>=3 && recent.every(s=>s.pct>=85)) {
+    const idx = LEVEL_ORDER.indexOf(S.level);
+    if (idx < LEVEL_ORDER.length-1) {
+      const newLevel = LEVEL_ORDER[idx+1];
+      S.level = newLevel;
+      localStorage.setItem('g_level', newLevel);
+      updateBadge();
+      setTimeout(()=>alert(`🎉 Chúc mừng! Bạn đã đạt điểm cao liên tục 3 lần ở cấp ${LEVEL_ORDER[idx]}.\nHệ thống tự động nâng bạn lên cấp ${newLevel}!`), 300);
+    }
+  }
+}
+
+// ══════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════
 window.onload = () => {
   const k = localStorage.getItem('g_key');
   const m = localStorage.getItem('g_model');
+  const p = localStorage.getItem('g_provider');
   const l = localStorage.getItem('g_level');
-  if (k) { S.key=k; S.model=m||'gemini-3.5-flash'; S.level=l||'B1'; launchApp(); }
+  if (k) { S.key=k; S.model=m||'gemini-3.5-flash'; S.provider=p||'gemini'; S.level=l||'B1'; launchApp(); }
+  document.getElementById('providerSel').value = p||'gemini';
+  onProviderChange(false);
 };
+
+function onProviderChange(resetModel=true) {
+  const p = document.getElementById('providerSel').value;
+  const d = PROVIDER_DEFAULTS[p];
+  document.getElementById('keyLabel').textContent = p==='gemini'?'🔑 Gemini API Key':p==='openai'?'🔑 OpenAI API Key':'🔑 Claude API Key';
+  document.getElementById('apiKeyInp').placeholder = d.keyPlaceholder;
+  document.getElementById('keyHint').innerHTML = d.keyHint;
+  document.getElementById('modelHint').innerHTML = d.modelHint;
+  if (resetModel) document.getElementById('modelSel').value = d.model;
+}
 
 function saveSettings() {
   const k = document.getElementById('apiKeyInp').value.trim();
-  const m = document.getElementById('modelSel').value;
+  const m = document.getElementById('modelSel').value.trim();
+  const p = document.getElementById('providerSel').value;
   if (!k) { showErr('setErr','Vui lòng nhập API key.'); return; }
-  S.key=k; S.model=m;
+  S.key=k; S.model=m; S.provider=p;
   localStorage.setItem('g_key',k);
   localStorage.setItem('g_model',m);
+  localStorage.setItem('g_provider',p);
   launchApp();
 }
 
@@ -390,6 +486,8 @@ function launchApp() {
 function showSettings() {
   document.getElementById('mainApp').classList.remove('active');
   document.getElementById('settingsScreen').style.display='flex';
+  document.getElementById('providerSel').value=S.provider;
+  onProviderChange(false);
   document.getElementById('apiKeyInp').value=S.key;
   document.getElementById('modelSel').value=S.model;
 }
@@ -407,48 +505,82 @@ function switchTab(t) {
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById('tab-'+t).classList.add('active');
   document.getElementById('scr-'+t).classList.add('active');
+  if (t==='notebook') renderNotebook();
 }
 
 // ══════════════════════════════════════════════
-// GEMINI API
+// MULTI-PROVIDER AI API (Gemini / OpenAI / Claude)
 // ══════════════════════════════════════════════
 async function gemini(prompt, sys='', temp=0.7) {
-  const body = {
-    contents:[{parts:[{text:prompt}]}],
-    generationConfig:{temperature:temp, maxOutputTokens:8192}
-  };
-  if (sys) body.system_instruction={parts:[{text:sys}]};
+  return callAI([{r:'user',t:prompt}], sys, temp);
+}
 
+async function geminiConv(hist, sys='') {
+  return callAI(hist, sys, 0.8);
+}
+
+async function callAI(hist, sys='', temp=0.7) {
+  if (S.provider==='gemini') return callGemini(hist, sys, temp);
+  if (S.provider==='openai') return callOpenAI(hist, sys, temp);
+  if (S.provider==='claude') return callClaude(hist, sys, temp);
+  throw new Error('Provider không xác định');
+}
+
+async function callGemini(hist, sys, temp) {
+  const contents = hist.map(m=>({role:m.r==='ai'?'model':'user', parts:[{text:m.t}]}));
+  const body = {contents, generationConfig:{temperature:temp, maxOutputTokens:8192}};
+  if (sys) body.system_instruction={parts:[{text:sys}]};
   const r = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${S.model}:generateContent?key=${S.key}`,
     {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}
   );
   if (!r.ok) {
-    const e=await r.json();
+    const e=await r.json().catch(()=>({}));
     const msg = e.error?.message||'';
-    if (msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED')) {
-      throw new Error('⏳ Vượt giới hạn free tier (20 lần/phút). Chờ 15 giây rồi thử lại!');
-    }
-    if (msg.includes('API_KEY') || msg.includes('invalid')) {
-      throw new Error('🔑 API key không hợp lệ. Vào ⚙️ cài đặt để kiểm tra lại.');
-    }
-    throw new Error(msg || 'Lỗi kết nối API');
+    if (msg.includes('quota')||msg.includes('RESOURCE_EXHAUSTED')) throw new Error('⏳ Vượt giới hạn free tier. Chờ 15 giây rồi thử lại!');
+    if (msg.includes('API_KEY')||msg.includes('invalid')) throw new Error('🔑 API key không hợp lệ. Vào ⚙️ cài đặt để kiểm tra lại.');
+    throw new Error(msg || 'Lỗi kết nối Gemini API');
   }
   const d = await r.json();
   return d.candidates[0].content.parts[0].text;
 }
 
-async function geminiConv(hist, sys='') {
-  const contents = hist.map(m=>({role:m.r==='ai'?'model':'user', parts:[{text:m.t}]}));
-  const body = {contents, generationConfig:{temperature:0.8, maxOutputTokens:2048}};
-  if (sys) body.system_instruction={parts:[{text:sys}]};
-  const r = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${S.model}:generateContent?key=${S.key}`,
-    {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}
-  );
-  if (!r.ok) throw new Error('API error '+r.status);
+async function callOpenAI(hist, sys, temp) {
+  const messages = [];
+  if (sys) messages.push({role:'system', content:sys});
+  hist.forEach(m=>messages.push({role:m.r==='ai'?'assistant':'user', content:m.t}));
+  const r = await fetch('https://api.openai.com/v1/chat/completions', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':`Bearer ${S.key}`},
+    body:JSON.stringify({ model:S.model, messages, temperature:temp, max_tokens:4096 })
+  });
+  if (!r.ok) {
+    const e=await r.json().catch(()=>({}));
+    const msg = e.error?.message||'';
+    if (msg.includes('quota')||msg.includes('rate_limit')) throw new Error('⏳ Vượt giới hạn OpenAI. Chờ rồi thử lại!');
+    if (msg.includes('API key')||msg.includes('invalid')) throw new Error('🔑 API key không hợp lệ. Vào ⚙️ cài đặt để kiểm tra lại.');
+    throw new Error(msg || 'Lỗi kết nối OpenAI API');
+  }
   const d = await r.json();
-  return d.candidates[0].content.parts[0].text;
+  return d.choices[0].message.content;
+}
+
+async function callClaude(hist, sys, temp) {
+  const messages = hist.map(m=>({role:m.r==='ai'?'assistant':'user', content:m.t}));
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-api-key':S.key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({ model:S.model, system:sys||undefined, messages, temperature:temp, max_tokens:4096 })
+  });
+  if (!r.ok) {
+    const e=await r.json().catch(()=>({}));
+    const msg = e.error?.message||'';
+    if (msg.includes('rate_limit')||msg.includes('overloaded')) throw new Error('⏳ Vượt giới hạn Claude. Chờ rồi thử lại!');
+    if (msg.includes('authentication')||msg.includes('invalid')) throw new Error('🔑 API key không hợp lệ. Vào ⚙️ cài đặt để kiểm tra lại.');
+    throw new Error(msg || 'Lỗi kết nối Claude API');
+  }
+  const d = await r.json();
+  return d.content[0].text;
 }
 
 function parseJ(txt) {
@@ -754,6 +886,7 @@ function renderQuiz(type) {
   document.getElementById('quizBody').innerHTML=h;
 }
 
+let mcCorrectCount=0;
 function chkMC(qi,optI,chosen,correct) {
   document.querySelectorAll(`#mcq${qi} .opt-btn`).forEach((b,i)=>{
     b.disabled=true;
@@ -761,6 +894,13 @@ function chkMC(qi,optI,chosen,correct) {
     else if (i===optI) b.classList.add('wrong');
   });
   document.getElementById('exp'+qi).classList.remove('hidden');
+  if (chosen===correct) mcCorrectCount++;
+  const answered=document.querySelectorAll('.opt-btn:disabled').length / (S.quizData[0]?.options.length||4);
+  if (Math.round(answered)===S.quizData.length) {
+    const pct=Math.round((mcCorrectCount/S.quizData.length)*100);
+    addQuizScore(pct);
+    mcCorrectCount=0;
+  }
 }
 
 function chkFill() {
@@ -835,7 +975,10 @@ function startChat() {
   S.chatHist.push({r:'ai',t:opening});
 }
 
-function backToScenarios() { toggle('chatUI',false); toggle('scPick',true); }
+function backToScenarios() {
+  if (S.chatHist.filter(m=>m.r==='user').length>0) saveConvSession(S.scenario, S.chatHist);
+  toggle('chatUI',false); toggle('scPick',true);
+}
 
 function addMsg(role, txt, isSystem=false) {
   const win=document.getElementById('chatWin');
@@ -917,30 +1060,46 @@ Student level: ${S.level}. Scenario: ${SC_NAMES[S.scenario]||S.scenario}.
 Student said these sentences:
 ${userMsgs.map((m,i)=>`${i+1}. "${m}"`).join('\n')}
 
-Write a feedback report in Vietnamese with this exact format:
-
-✅ ĐIỂM TỐT:
-[1-2 things the student did well]
-
-⚠️ LỖI CẦN SỬA:
-[For each error found, write:]
-❌ Câu sai: "[the wrong sentence]"
-✅ Câu đúng: "[the correct version]"
-📝 Giải thích: [brief explanation in Vietnamese why it's wrong]
-
-💡 GỢI Ý:
-[1-2 specific tips to improve]
-
-If there are no errors, say "Tuyệt vời! Không có lỗi đáng kể 🎉" and give positive feedback.
-Be encouraging and specific. Focus on the most important errors only (max 4).`;
+Return ONLY valid JSON, no markdown:
+{"good_points":["point 1","point 2"],"errors":[{"wrong":"the wrong sentence","correct":"the correct version","explain_vi":"brief Vietnamese explanation"}],"tips":["tip 1","tip 2"]}
+If no errors found, return empty errors array. Focus on max 4 most important errors. All explanations in Vietnamese, sentences in English.`;
 
     const raw=await gemini(prompt,'',0.4);
     toggle('convLoad',false);
-    // Show as a special review message
+    const data=parseJ(raw);
+
+    // Save errors to notebook
+    if (data.errors && data.errors.length>0) {
+      addToErrorNotebook(data.errors.map(e=>({...e, scenario:SC_NAMES[S.scenario]||S.scenario, level:S.level})));
+    }
+
+    // Render feedback
+    let html=`<div style="font-weight:600;color:var(--primary);margin-bottom:10px;font-size:14px">🔍 Phân tích lỗi của bạn</div>`;
+    if (data.good_points?.length) {
+      html+=`<div style="margin-bottom:10px"><strong style="color:var(--success)">✅ Điểm tốt:</strong><br>${data.good_points.map(p=>`• ${p}`).join('<br>')}</div>`;
+    }
+    if (data.errors?.length) {
+      html+=`<div style="margin-bottom:10px"><strong style="color:var(--danger)">⚠️ Lỗi cần sửa:</strong>`;
+      data.errors.forEach(e=>{
+        html+=`<div style="margin-top:8px;padding:8px 10px;background:#FEF2F2;border-radius:7px;border:.5px solid #FECACA">
+          <div style="color:var(--danger)">❌ "${e.wrong}"</div>
+          <div style="color:var(--success);margin-top:2px">✅ "${e.correct}"</div>
+          <div style="color:var(--muted);font-size:12px;margin-top:2px">📝 ${e.explain_vi}</div>
+        </div>`;
+      });
+      html+=`</div>`;
+    } else {
+      html+=`<div style="color:var(--success)">🎉 Tuyệt vời! Không có lỗi đáng kể.</div>`;
+    }
+    if (data.tips?.length) {
+      html+=`<div><strong style="color:var(--primary)">💡 Gợi ý:</strong><br>${data.tips.map(t=>`• ${t}`).join('<br>')}</div>`;
+    }
+    html+=`<div style="margin-top:10px;font-size:11px;color:var(--muted)">Đã lưu vào 📓 Sổ tay · Tiếp tục hội thoại bên dưới 👇</div>`;
+
     const win=document.getElementById('chatWin');
     const d=document.createElement('div');
-    d.style.cssText='margin:8px 0;padding:14px;background:var(--surface-1);border-radius:12px;border:.5px solid var(--border);font-size:13px;line-height:1.8';
-    d.innerHTML=`<div style="font-weight:600;color:var(--primary);margin-bottom:8px;font-size:14px">🔍 Phân tích lỗi của bạn</div><div style="white-space:pre-wrap;color:var(--text)">${raw}</div><div style="margin-top:10px;font-size:11px;color:var(--muted)">Tiếp tục hội thoại bên dưới 👇</div>`;
+    d.style.cssText='margin:8px 0;padding:14px;background:var(--surface-1);border-radius:12px;border:.5px solid var(--border);font-size:13px;line-height:1.7';
+    d.innerHTML=html;
     win.appendChild(d);
     win.scrollTop=win.scrollHeight;
   } catch(e) {
@@ -999,6 +1158,72 @@ Write a comprehensive session summary in Vietnamese with this format:
   }
 }
 
+
+// ══════════════════════════════════════════════
+// NOTEBOOK (Sổ tay) — Progress + Error history
+// ══════════════════════════════════════════════
+function renderNotebook() {
+  // Progress box
+  const scores = getQuizScores();
+  const convHist = getConvHistory();
+  const errorsAll = getErrorNotebook();
+  const idx = LEVEL_ORDER.indexOf(S.level);
+  const recentAtLevel = scores.filter(s=>s.level===S.level).slice(-3);
+
+  let progHtml = `
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+      <div style="flex:1;min-width:100px;text-align:center;padding:12px;background:var(--bg-accent, #EFF6FF);border-radius:8px">
+        <div style="font-size:24px;font-weight:700;color:var(--primary)">${S.level}</div>
+        <div style="font-size:11px;color:var(--muted)">Cấp độ hiện tại</div>
+      </div>
+      <div style="flex:1;min-width:100px;text-align:center;padding:12px;background:#F0FDF4;border-radius:8px">
+        <div style="font-size:24px;font-weight:700;color:var(--success)">${convHist.length}</div>
+        <div style="font-size:11px;color:var(--muted)">Phiên hội thoại</div>
+      </div>
+      <div style="flex:1;min-width:100px;text-align:center;padding:12px;background:#FFF7ED;border-radius:8px">
+        <div style="font-size:24px;font-weight:700;color:var(--warning)">${errorsAll.length}</div>
+        <div style="font-size:11px;color:var(--muted)">Lỗi đã ghi nhận</div>
+      </div>
+    </div>`;
+
+  if (idx < LEVEL_ORDER.length-1) {
+    progHtml += `<div style="font-size:12px;color:var(--muted);margin-bottom:8px">🎯 Tiến độ lên cấp ${LEVEL_ORDER[idx+1]}: làm 3 bài trắc nghiệm đạt ≥85% liên tiếp</div>
+    <div style="display:flex;gap:5px">
+      ${[0,1,2].map(i=>`<div style="flex:1;height:8px;border-radius:4px;background:${recentAtLevel[i]&&recentAtLevel[i].pct>=85?'var(--success)':'var(--border)'}"></div>`).join('')}
+    </div>`;
+  } else {
+    progHtml += `<div style="font-size:12px;color:var(--success)">🏆 Bạn đã đạt cấp độ cao nhất!</div>`;
+  }
+
+  if (convHist.length>0) {
+    progHtml += `<div style="margin-top:14px;font-size:12px;font-weight:500;color:var(--text);margin-bottom:6px">Lịch sử hội thoại gần đây:</div>
+    <div style="display:flex;flex-direction:column;gap:5px">
+      ${convHist.slice(-5).reverse().map(h=>`
+        <div style="display:flex;justify-content:space-between;padding:7px 10px;background:var(--bg);border-radius:6px;font-size:12px">
+          <span>${SC_NAMES[h.scenario]||h.scenario}</span>
+          <span style="color:var(--muted)">${new Date(h.date).toLocaleDateString('vi-VN')} · ${h.messages} câu</span>
+        </div>`).join('')}
+    </div>`;
+  }
+  document.getElementById('progressBox').innerHTML = progHtml;
+
+  // Error notebook
+  const errBox = document.getElementById('errorNotebook');
+  if (errorsAll.length===0) {
+    errBox.innerHTML = `<div style="text-align:center;padding:20px;color:var(--muted);font-size:13px">Chưa có lỗi nào được ghi nhận.<br>Dùng nút 🔍 Sửa lỗi trong Hội thoại để bắt đầu!</div>`;
+    return;
+  }
+  errBox.innerHTML = errorsAll.map(e=>`
+    <div style="margin-bottom:10px;padding:10px 12px;background:#FEF2F2;border-radius:8px;border:.5px solid #FECACA">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <span class="chip chip-orange" style="font-size:10px">${e.scenario||''}</span>
+        <span style="font-size:10px;color:var(--muted)">${new Date(e.date).toLocaleDateString('vi-VN')}</span>
+      </div>
+      <div style="color:var(--danger);font-size:13px">❌ "${e.wrong}"</div>
+      <div style="color:var(--success);font-size:13px;margin-top:2px">✅ "${e.correct}"</div>
+      <div style="color:var(--muted);font-size:12px;margin-top:2px">📝 ${e.explain_vi}</div>
+    </div>`).join('');
+}
 
 // ══════════════════════════════════════════════
 // UTILS
