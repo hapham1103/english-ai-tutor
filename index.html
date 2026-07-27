@@ -170,6 +170,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
     <label id="modelLabel">🤖 Tên Model (gõ chính xác)</label>
     <input type="text" id="modelSel" placeholder="gemini-3.5-flash" value="gemini-3.5-flash">
     <div class="hint" id="modelHint">✅ Model của bạn là <strong>gemini-3.5-flash</strong></div>
+    <div style="margin-top:8px;padding:8px 10px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;font-size:11px;color:#92400E">💡 Free tier giới hạn theo NGÀY (không chỉ theo phút). Nếu hết hạn mức, đổi model (vd: gemini-2.0-flash) hoặc chờ reset ngày hôm sau.</div>
 
     <div id="setErr" class="hidden" style="margin-top:12px;padding:10px 14px;background:#FEF2F2;border-radius:8px;color:#991B1B;font-size:13px;border:1px solid #FECACA"></div>
     <button class="btn btn-primary btn-block" onclick="saveSettings()">🚀 Bắt đầu học</button>
@@ -300,13 +301,14 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
           <button class="btn btn-outline btn-sm" onclick="doSummary()" title="Tổng kết toàn bộ phiên học">📊 Tổng kết</button>
         </div>
         <div class="chat-win" id="chatWin"></div>
-        <div id="convLoad" class="hidden"><div class="loading" style="padding:8px"><div class="dots"><span></span><span></span><span></span></div></div></div>
+        <div id="convLoad" class="hidden"><div class="loading" style="padding:8px"><div class="dots"><span></span><span></span><span></span></div><span id="convLoadTxt" style="margin-left:6px"></span></div></div>
+        <div id="micHint" class="hidden" style="font-size:12px;color:#92400E;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:6px 10px;margin-bottom:6px;text-align:center"></div>
         <div class="chat-ia">
           <button class="mic-btn" id="micBtn" onclick="toggleMic()" title="Nhấn để nói">🎤</button>
           <textarea class="chat-inp" id="chatInp" placeholder="Gõ tiếng Anh rồi nhấn Enter hoặc ➤" rows="1" onkeydown="onChatKey(event)" oninput="autoResize(this)"></textarea>
           <button class="send-btn" onclick="sendMsg()">➤</button>
         </div>
-        <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:6px">🎤 Cần Chrome/Edge để nói bằng mic · Gõ <strong>"sửa lỗi cho tôi"</strong> hoặc nhấn 🔍 để xem lỗi</div>
+        <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:6px">💬 Trò chuyện tự do, đổi chủ đề thoải mái · Gõ <strong>"sửa lỗi cho tôi"</strong> hoặc nhấn 🔍 để xem lỗi</div>
       </div>
     </div>
 
@@ -351,6 +353,7 @@ const S = {
   quizData: null, quizType: '',
   scenario: '', chatHist: [],
   quizScores: [], // track recent quiz results for auto level-up
+  stuckCount: 0, // consecutive short/uncertain replies — triggers topic suggestions
 };
 
 const PROVIDER_DEFAULTS = {
@@ -375,12 +378,12 @@ const SC_NAMES = {
 };
 
 const SC_SYSTEM = {
-  airport:'You are a friendly airline check-in agent at an international airport. The student is a passenger. Have a NATURAL conversation — respond to what they say, ask follow-up questions. Do NOT correct their English errors. Just understand their meaning and respond naturally.',
-  hotel:'You are a friendly hotel receptionist. The student is a guest. Have a NATURAL conversation — respond warmly and helpfully. Do NOT correct their English errors. Just understand their meaning and respond naturally.',
-  restaurant:'You are an attentive waiter at a nice restaurant. The student is a customer. Have a NATURAL conversation — take their order, answer questions. Do NOT correct their English errors. Just understand their meaning and respond naturally.',
-  interview:'You are an experienced HR manager interviewing the student. Have a NATURAL professional conversation. Do NOT correct their English errors. Just listen and respond to their answers naturally.',
-  shopping:'You are a helpful shop assistant. The student is a customer. Have a NATURAL conversation — help them find what they need. Do NOT correct their English errors. Just understand their meaning and respond naturally.',
-  free:'You are a friendly native English speaker having a casual chat. Topics: hobbies, travel, daily life, plans. Have a NATURAL conversation. Do NOT correct their English errors. Just respond warmly and naturally.',
+  airport:'Role: airline check-in agent. Setting: airport check-in counter.',
+  hotel:'Role: hotel receptionist. Setting: hotel front desk.',
+  restaurant:'Role: waiter. Setting: restaurant.',
+  interview:'Role: HR interviewer. Setting: job interview.',
+  shopping:'Role: shop assistant. Setting: clothing store.',
+  free:'Role: friendly native speaker. Setting: casual chat, any topic.',
 };
 
 const SC_OPEN = {
@@ -512,23 +515,69 @@ function switchTab(t) {
 // MULTI-PROVIDER AI API (Gemini / OpenAI / Claude)
 // ══════════════════════════════════════════════
 async function gemini(prompt, sys='', temp=0.7) {
-  return callAI([{r:'user',t:prompt}], sys, temp);
+  return callAI([{r:'user',t:prompt}], sys, temp, 8192);
 }
 
 async function geminiConv(hist, sys='') {
-  return callAI(hist, sys, 0.8);
+  // Replies capped at ~15 words by prompt — small token budget = more turns per quota, faster replies
+  return callAI(hist, sys, 0.8, 150);
 }
 
-async function callAI(hist, sys='', temp=0.7) {
-  if (S.provider==='gemini') return callGemini(hist, sys, temp);
-  if (S.provider==='openai') return callOpenAI(hist, sys, temp);
-  if (S.provider==='claude') return callClaude(hist, sys, temp);
-  throw new Error('Provider không xác định');
+async function callAI(hist, sys='', temp=0.7, maxTok=4096) {
+  const fn = S.provider==='gemini'?callGemini : S.provider==='openai'?callOpenAI : callClaude;
+  let lastErr;
+  for (let attempt=0; attempt<3; attempt++) {
+    try {
+      const txt = document.getElementById('convLoadTxt');
+      if (txt) txt.textContent = attempt>0 ? `Đang thử lại (lần ${attempt+1}/3)...` : '';
+      return await fn(hist, sys, temp, maxTok);
+    } catch(e) {
+      lastErr = e;
+      if (e.retryable && attempt<2) {
+        const txt = document.getElementById('convLoadTxt');
+        const waitS = Math.round((e.retryAfter || (attempt+1)*2000)/1000);
+        if (txt) txt.textContent = `⏳ Chờ ${waitS}s rồi tự thử lại...`;
+        await new Promise(res=>setTimeout(res, e.retryAfter || (attempt+1)*2000));
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw lastErr;
 }
 
-async function callGemini(hist, sys, temp) {
+function diagnoseGeminiError(msg, status) {
+  const lower = msg.toLowerCase();
+  if (lower.includes('per day') || lower.includes('perday') || lower.includes('daily')) {
+    const err = new Error('📅 Đã dùng hết lượt miễn phí TRONG NGÀY của model này. Free tier reset sau nửa đêm (giờ Thái Bình Dương, ~14-15h chiều VN). Cách khắc phục: đổi sang model khác trong ⚙️ Cài đặt (ví dụ gemini-2.0-flash thường có hạn ngạch riêng), hoặc chờ đến ngày mai.');
+    err.retryable = false;
+    return err;
+  }
+  if (lower.includes('quota') || lower.includes('resource_exhausted') || status===429) {
+    const err = new Error('⏳ Vượt giới hạn tốc độ (requests/phút). Đang tự động thử lại...');
+    err.retryable = true;
+    err.retryAfter = 8000;
+    return err;
+  }
+  if (lower.includes('api_key') || lower.includes('api key not valid') || lower.includes('invalid')) {
+    const err = new Error('🔑 API key không hợp lệ. Vào ⚙️ cài đặt để kiểm tra lại.');
+    err.retryable = false;
+    return err;
+  }
+  if (status===503 || lower.includes('overloaded') || lower.includes('unavailable')) {
+    const err = new Error('🔄 Server Gemini đang quá tải. Đang tự động thử lại...');
+    err.retryable = true;
+    err.retryAfter = 3000;
+    return err;
+  }
+  const err = new Error(msg || 'Lỗi kết nối Gemini API');
+  err.retryable = false;
+  return err;
+}
+
+async function callGemini(hist, sys, temp, maxTok) {
   const contents = hist.map(m=>({role:m.r==='ai'?'model':'user', parts:[{text:m.t}]}));
-  const body = {contents, generationConfig:{temperature:temp, maxOutputTokens:8192}};
+  const body = {contents, generationConfig:{temperature:temp, maxOutputTokens:maxTok}};
   if (sys) body.system_instruction={parts:[{text:sys}]};
   const r = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${S.model}:generateContent?key=${S.key}`,
@@ -536,47 +585,62 @@ async function callGemini(hist, sys, temp) {
   );
   if (!r.ok) {
     const e=await r.json().catch(()=>({}));
-    const msg = e.error?.message||'';
-    if (msg.includes('quota')||msg.includes('RESOURCE_EXHAUSTED')) throw new Error('⏳ Vượt giới hạn free tier. Chờ 15 giây rồi thử lại!');
-    if (msg.includes('API_KEY')||msg.includes('invalid')) throw new Error('🔑 API key không hợp lệ. Vào ⚙️ cài đặt để kiểm tra lại.');
-    throw new Error(msg || 'Lỗi kết nối Gemini API');
+    throw diagnoseGeminiError(e.error?.message||'', r.status);
   }
   const d = await r.json();
-  return d.candidates[0].content.parts[0].text;
+  const cand = d.candidates?.[0];
+  if (!cand) throw new Error('Model không trả về nội dung. Thử lại nhé!');
+  if (cand.finishReason==='MAX_TOKENS' && (!cand.content?.parts?.length)) {
+    throw new Error('Câu trả lời bị cắt do quá dài. Thử lại nhé!');
+  }
+  return cand.content.parts[0].text;
 }
 
-async function callOpenAI(hist, sys, temp) {
+async function callOpenAI(hist, sys, temp, maxTok) {
   const messages = [];
   if (sys) messages.push({role:'system', content:sys});
   hist.forEach(m=>messages.push({role:m.r==='ai'?'assistant':'user', content:m.t}));
   const r = await fetch('https://api.openai.com/v1/chat/completions', {
     method:'POST',
     headers:{'Content-Type':'application/json','Authorization':`Bearer ${S.key}`},
-    body:JSON.stringify({ model:S.model, messages, temperature:temp, max_tokens:4096 })
+    body:JSON.stringify({ model:S.model, messages, temperature:temp, max_tokens:maxTok })
   });
   if (!r.ok) {
     const e=await r.json().catch(()=>({}));
     const msg = e.error?.message||'';
-    if (msg.includes('quota')||msg.includes('rate_limit')) throw new Error('⏳ Vượt giới hạn OpenAI. Chờ rồi thử lại!');
-    if (msg.includes('API key')||msg.includes('invalid')) throw new Error('🔑 API key không hợp lệ. Vào ⚙️ cài đặt để kiểm tra lại.');
+    const lower=msg.toLowerCase();
+    if (lower.includes('rate_limit')||r.status===429) {
+      const err=new Error('⏳ Vượt giới hạn tốc độ OpenAI. Đang tự động thử lại...');
+      err.retryable=true; err.retryAfter=8000; throw err;
+    }
+    if (lower.includes('quota')) throw new Error('💳 Hết credit OpenAI. Kiểm tra billing tại platform.openai.com');
+    if (lower.includes('api key')||lower.includes('invalid')) throw new Error('🔑 API key không hợp lệ. Vào ⚙️ cài đặt để kiểm tra lại.');
     throw new Error(msg || 'Lỗi kết nối OpenAI API');
   }
   const d = await r.json();
   return d.choices[0].message.content;
 }
 
-async function callClaude(hist, sys, temp) {
+async function callClaude(hist, sys, temp, maxTok) {
   const messages = hist.map(m=>({role:m.r==='ai'?'assistant':'user', content:m.t}));
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method:'POST',
     headers:{'Content-Type':'application/json','x-api-key':S.key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-    body:JSON.stringify({ model:S.model, system:sys||undefined, messages, temperature:temp, max_tokens:4096 })
+    body:JSON.stringify({ model:S.model, system:sys||undefined, messages, temperature:temp, max_tokens:maxTok })
   });
   if (!r.ok) {
     const e=await r.json().catch(()=>({}));
     const msg = e.error?.message||'';
-    if (msg.includes('rate_limit')||msg.includes('overloaded')) throw new Error('⏳ Vượt giới hạn Claude. Chờ rồi thử lại!');
-    if (msg.includes('authentication')||msg.includes('invalid')) throw new Error('🔑 API key không hợp lệ. Vào ⚙️ cài đặt để kiểm tra lại.');
+    const lower=msg.toLowerCase();
+    if (lower.includes('rate_limit')||r.status===429) {
+      const err=new Error('⏳ Vượt giới hạn tốc độ Claude. Đang tự động thử lại...');
+      err.retryable=true; err.retryAfter=8000; throw err;
+    }
+    if (lower.includes('overloaded')) {
+      const err=new Error('🔄 Server Claude quá tải. Đang tự động thử lại...');
+      err.retryable=true; err.retryAfter=3000; throw err;
+    }
+    if (lower.includes('authentication')||lower.includes('invalid')) throw new Error('🔑 API key không hợp lệ. Vào ⚙️ cài đặt để kiểm tra lại.');
     throw new Error(msg || 'Lỗi kết nối Claude API');
   }
   const d = await r.json();
@@ -638,16 +702,52 @@ function toggleMic() {
   }
   if (isListening) { recog?.stop(); return; }
   const SR = window.SpeechRecognition||window.webkitSpeechRecognition;
-  recog = new SR(); recog.lang='en-US'; recog.continuous=false; recog.interimResults=true;
-  recog.onstart = ()=>{ isListening=true; document.getElementById('micBtn').classList.add('on'); document.getElementById('chatInp').placeholder='🎤 Đang nghe...'; };
-  recog.onresult = e=>{ document.getElementById('chatInp').value=[...e.results].map(r=>r[0].transcript).join(''); };
-  recog.onend = ()=>{
-    isListening=false; document.getElementById('micBtn').classList.remove('on');
-    document.getElementById('chatInp').placeholder='Gõ tiếng Anh rồi nhấn Enter hoặc ➤';
-    if (document.getElementById('chatInp').value.trim()) sendMsg();
+  recog = new SR();
+  recog.lang='en-US';
+  recog.continuous=false;
+  recog.interimResults=true;
+  recog.maxAlternatives=3; // capture multiple guesses — helps when accent causes misheard words
+  recog.onstart = ()=>{
+    isListening=true;
+    document.getElementById('micBtn').classList.add('on');
+    document.getElementById('chatInp').placeholder='🎤 Đang nghe... nói tự nhiên nhé';
   };
-  recog.onerror = ()=>{ isListening=false; document.getElementById('micBtn').classList.remove('on'); };
+  recog.onresult = e=>{
+    const finalText=[...e.results].map(r=>r[0].transcript).join('');
+    document.getElementById('chatInp').value=finalText;
+    autoResize(document.getElementById('chatInp'));
+  };
+  recog.onend = ()=>{
+    isListening=false;
+    document.getElementById('micBtn').classList.remove('on');
+    const inp=document.getElementById('chatInp');
+    inp.placeholder='Gõ tiếng Anh rồi nhấn Enter hoặc ➤';
+    if (inp.value.trim()) {
+      // Show transcript briefly (2s), then auto-send — keeps conversation flowing naturally.
+      // If the learner starts typing/editing during this window, auto-send is cancelled.
+      showMicReviewHint('🎤 "'+inp.value.trim()+'" — đang gửi...');
+      const snapshot=inp.value;
+      clearTimeout(window._autoSendTimer);
+      window._autoSendTimer=setTimeout(()=>{
+        if (document.getElementById('chatInp').value===snapshot && snapshot.trim()) sendMsg();
+      }, 2000);
+    }
+  };
+  recog.onerror = (ev)=>{
+    isListening=false;
+    document.getElementById('micBtn').classList.remove('on');
+    if (ev.error==='no-speech') showMicReviewHint('🔇 Không nghe thấy gì. Thử nói to và rõ hơn nhé!');
+  };
   recog.start();
+}
+
+function showMicReviewHint(msg) {
+  const box=document.getElementById('micHint');
+  if (!box) return;
+  box.textContent = msg || '';
+  box.classList.remove('hidden');
+  clearTimeout(window._micHintTimer);
+  window._micHintTimer=setTimeout(()=>box.classList.add('hidden'), 3000);
 }
 
 // ══════════════════════════════════════════════
@@ -965,6 +1065,7 @@ function pickScenario(btn) {
 
 function startChat() {
   S.chatHist=[];
+  S.stuckCount=0;
   toggle('scPick',false); toggle('chatUI',true);
   document.getElementById('scChip').textContent=SC_NAMES[S.scenario]||S.scenario;
   document.getElementById('lvlChip3').textContent='🎯 '+S.level;
@@ -1021,24 +1122,27 @@ async function sendMsg() {
   S.chatHist.push({r:'user',t:txt});
   toggle('convLoad',true);
 
-  const sys=`${SC_SYSTEM[S.scenario]||'You are a friendly English conversation partner.'}
+  // Detect if learner seems stuck: very short reply or uncertain phrase
+  const stuckPhrases=['i don\'t know','dont know','not sure','i dont understand',"don't understand",'sorry','um','uh','huh','what?'];
+  const wordCount=txt.split(/\s+/).filter(Boolean).length;
+  const looksStuck = wordCount<=2 || stuckPhrases.some(p=>txt.toLowerCase().includes(p));
+  S.stuckCount = looksStuck ? (S.stuckCount||0)+1 : 0;
 
-Student level: ${S.level}.
-IMPORTANT RULES:
-1. You are a NATIVE SPEAKER in this scenario, NOT a teacher — stay in character completely
-2. Respond NATURALLY and BRIEFLY (1-3 sentences) like a real person would
-3. Focus entirely on the MEANING of what they say — ignore grammar mistakes
-4. NEVER correct grammar, vocabulary, or pronunciation — that will happen separately later
-5. If their message is unclear, ask for clarification naturally ("Sorry, do you mean...?")
-6. If they write in Vietnamese, respond: "Let's keep it in English! Try saying it in English 😊"`;
+  const sys=`${SC_SYSTEM[S.scenario]||'Role: friendly conversation partner.'} Level: ${S.level}.
+Rules: Reply in 1 short sentence (max 15 words), like real chat, no explanations. Answer/ask about whatever the student brings up — follow their lead, topic can drift freely, don't force back to the original scene. Never correct grammar. Input is voice-to-text from a non-native accent — words are often wrong, missing, or jumbled, but usually 2-3 key words still hint at the real meaning (e.g. "want go store buy" → they want to go shopping). ACTIVELY piece together the most plausible intent from whatever words are recognizable and respond to that — do not mention the transcription. Only ask them to repeat if almost nothing is recognizable (pure noise).
+If the student seems STUCK — very short replies like "I don't know"/"sorry"/"um", or repeated confusion/silence — do NOT just repeat the question. Instead warmly offer 2-3 easy topic options to pick from (e.g. "No worries! Want to talk about food, weather, or your weekend instead?") so they always have an easy way forward.
+${S.stuckCount>=1 ? 'IMPORTANT: The student just gave a short/uncertain reply — this is your cue to offer 2-3 simple topic choices right now, encouragingly.' : ''}
+If Vietnamese: "English please! 😊" + repeat your question.`;
 
   try {
-    const reply=await geminiConv(S.chatHist, sys);
+    // Only send last 8 messages to API — short context is enough for casual chat, saves quota
+    const histToSend = S.chatHist.slice(-8);
+    const reply=await geminiConv(histToSend, sys);
     toggle('convLoad',false);
     addMsg('ai',reply);
     S.chatHist.push({r:'ai',t:reply});
     speak(reply);
-    if (S.chatHist.length>30) S.chatHist=S.chatHist.slice(-28);
+    if (S.chatHist.length>40) S.chatHist=S.chatHist.slice(-30); // keep more locally for notebook/summary
   } catch(e) {
     toggle('convLoad',false);
     addMsg('ai','⚠️ '+e.message);
