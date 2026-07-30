@@ -387,12 +387,12 @@ const SC_SYSTEM = {
 };
 
 const SC_OPEN = {
-  airport:"Hello! Welcome to the check-in counter. May I see your passport and booking confirmation, please?",
-  hotel:"Good afternoon! Welcome to our hotel. Do you have a reservation with us today?",
-  restaurant:"Good evening! Welcome. Do you have a reservation, or would you like me to find you a table?",
-  interview:"Good morning! Thank you for coming in today. Please have a seat. Could you start by telling me a little about yourself?",
-  shopping:"Hi there! Welcome! Is there something specific you're looking for today, or just browsing?",
-  free:"Hey! Great to meet you! So, what have you been up to lately?",
+  airport:"Hi! Passport and booking, please?",
+  hotel:"Welcome! Do you have a reservation?",
+  restaurant:"Welcome! Table for how many?",
+  interview:"Hi! Tell me about yourself.",
+  shopping:"Hi! Looking for something specific?",
+  free:"Hey! What's up?",
 };
 
 // ══════════════════════════════════════════════
@@ -519,8 +519,8 @@ async function gemini(prompt, sys='', temp=0.7) {
 }
 
 async function geminiConv(hist, sys='') {
-  // Replies capped at ~15 words by prompt — small token budget = more turns per quota, faster replies
-  return callAI(hist, sys, 0.8, 150);
+  // Replies capped at ~10 words by prompt — small token budget = more turns per quota, faster replies
+  return callAI(hist, sys, 0.7, 60);
 }
 
 async function callAI(hist, sys='', temp=0.7, maxTok=4096) {
@@ -1133,14 +1133,14 @@ async function sendMsg() {
   S.stuckCount = looksStuck ? (S.stuckCount||0)+1 : 0;
 
   const sys=`${SC_SYSTEM[S.scenario]||'Role: friendly conversation partner.'} Level: ${S.level}.
-Rules: Reply in 1 short sentence (max 15 words), like real chat, no explanations. Answer/ask about whatever the student brings up — follow their lead, topic can drift freely, don't force back to the original scene. Never correct grammar. Input is voice-to-text from a non-native accent — words are often wrong, missing, or jumbled, but usually 2-3 key words still hint at the real meaning (e.g. "want go store buy" → they want to go shopping). ACTIVELY piece together the most plausible intent from whatever words are recognizable and respond to that — do not mention the transcription. Only ask them to repeat if almost nothing is recognizable (pure noise).
-If the student seems STUCK — very short replies like "I don't know"/"sorry"/"um", or repeated confusion/silence — do NOT just repeat the question. Instead warmly offer 2-3 easy topic options to pick from (e.g. "No worries! Want to talk about food, weather, or your weekend instead?") so they always have an easy way forward.
-${S.stuckCount>=1 ? 'IMPORTANT: The student just gave a short/uncertain reply — this is your cue to offer 2-3 simple topic choices right now, encouragingly.' : ''}
-If Vietnamese: "English please! 😊" + repeat your question.`;
+Reply in max 10 words, 1 sentence, casual chat style. Follow student's topic freely, don't force back to scene. Never correct grammar. Input may be garbled voice-to-text (accent) — guess intent from recognizable words, don't mention transcription errors. If truly unintelligible, ask to repeat.
+If student stuck (short/unsure reply): suggest 2-3 easy topics instead of repeating question.
+${S.stuckCount>=1 ? 'Student just gave short/unsure reply — offer topic choices now.' : ''}
+If Vietnamese input: say "English please! 😊" + repeat last question.`;
 
   try {
     // Only send last 8 messages to API — short context is enough for casual chat, saves quota
-    const histToSend = S.chatHist.slice(-8);
+    const histToSend = S.chatHist.slice(-6);
     const reply=await geminiConv(histToSend, sys);
     toggle('convLoad',false);
     addMsg('ai',reply);
@@ -1164,9 +1164,9 @@ async function retryLastMsg(btn) {
   if (!lastUser) return;
   toggle('convLoad',true);
   const sys=`${SC_SYSTEM[S.scenario]||'Role: friendly conversation partner.'} Level: ${S.level}.
-Rules: Reply in 1 short sentence (max 15 words), like real chat, no explanations. Answer/ask about whatever the student brings up — follow their lead, topic can drift freely, don't force back to the original scene. Never correct grammar.`;
+Reply in max 10 words, 1 sentence, casual chat style. Follow student's topic freely. Never correct grammar.`;
   try {
-    const histToSend = S.chatHist.slice(-8);
+    const histToSend = S.chatHist.slice(-6);
     const reply=await geminiConv(histToSend, sys);
     toggle('convLoad',false);
     addMsg('ai',reply);
